@@ -86,8 +86,8 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/danielrosehill/Red-Alert-Geodash-20260312.git
-cd Red-Alert-Geodash-20260312
+git clone https://github.com/danielrosehill/Red-Alert-Geodash.git
+cd Red-Alert-Geodash
 ```
 
 ### 2. Configure environment
@@ -169,11 +169,29 @@ All endpoints return JSON.
 
 A sample backup script is provided in `scripts/nightly-backup.sh`. It exports alert data from InfluxDB as CSV and uploads to S3-compatible storage. Edit the variables at the top of the script to match your own storage configuration.
 
-## Data Sources
+## Data Sources & Attribution
 
-- **Polygon data**: 1,450 area boundaries from the [`amitfin/oref_alert`](https://github.com/amitfin/oref_alert) Home Assistant integration
-- **Alert data**: Pikud HaOref public API (geo-restricted to Israel)
-- **News feeds**: Times of Israel and JNS RSS feeds
+### Polygon / Area Data
+
+Area polygon boundaries, centroids, and district mappings are sourced from **[amitfin/oref_alert](https://github.com/amitfin/oref_alert)** by [Amit Finkelstein](https://github.com/amitfin), licensed under the [MIT License](https://github.com/amitfin/oref_alert/blob/main/LICENSE). This is the metadata component of his Home Assistant integration for Israeli Oref Alerts.
+
+Specifically:
+- `area_to_polygon.json` — 1,450 area polygon boundaries ([source](https://github.com/amitfin/oref_alert/tree/main/metadata))
+- Area info / centroids ([source](https://github.com/amitfin/oref_alert/blob/main/metadata/area_info.py))
+- Area-to-district mappings ([source](https://github.com/amitfin/oref_alert/blob/main/metadata/area_to_district.py))
+
+### Alert Data
+
+Live alert data is fetched from the [Pikud HaOref (Israel Homefront Command)](https://www.oref.org.il/) public API. This API is geo-restricted to Israel.
+
+### Maps
+
+Map tiles provided by [OpenStreetMap](https://www.openstreetmap.org/) via [Leaflet](https://leafletjs.com/).
+
+### News Feeds
+
+- [Times of Israel](https://www.timesofisrael.com/) RSS feed
+- [JNS](https://www.jns.org/) RSS feed
 
 ## Geo-Restriction
 
