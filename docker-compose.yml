@@ -1,0 +1,56 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: geodash-influxdb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8086:8086"   # InfluxDB UI — localhost only for security
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${DOCKER_INFLUXDB_INIT_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${DOCKER_INFLUXDB_INIT_PASSWORD:?Set DOCKER_INFLUXDB_INIT_PASSWORD in .env}
+      DOCKER_INFLUXDB_INIT_ORG: ${DOCKER_INFLUXDB_INIT_ORG:-geodash}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${DOCKER_INFLUXDB_INIT_BUCKET:-redalerts}
+      DOCKER_INFLUXDB_INIT_RETENTION: 0  # keep forever
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:?Set DOCKER_INFLUXDB_INIT_ADMIN_TOKEN in .env}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  geodash:
+    build: .
+    container_name: geodash-app
+    restart: unless-stopped
+    ports:
+      - "8083:8765"   # Dashboard at http://localhost:8083
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:?Set INFLUX_TOKEN in .env}
+      INFLUX_ORG: ${INFLUX_ORG:-geodash}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-redalerts}
+      POLL_INTERVAL: ${POLL_INTERVAL:-3}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - geodash-samples:/app/data/format-samples  # Daily Oref format captures
+      - geodash-settings:/app/data/user-settings   # Persistent user settings
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  geodash-samples:
+  geodash-settings:
