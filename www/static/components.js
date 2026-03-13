@@ -8,9 +8,9 @@
 const COMPONENT_CSS = `
 /* ── Header ──────────────────────────────────────────── */
 .geodash-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
     padding: 6px 12px;
     background: #16213e;
     border-bottom: 2px solid #0f3460;
@@ -24,22 +24,20 @@ const COMPONENT_CSS = `
 .geodash-header-left {
     display: flex;
     align-items: center;
-    gap: 6px 10px;
+    gap: 4px 8px;
     min-width: 0;
     flex-wrap: wrap;
-    flex: 1;
-    margin-right: 12px;
 }
 
 .geodash-header-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 6px;
     flex-shrink: 0;
 }
 
 .geodash-header h1 {
-    font-size: 1rem;
+    font-size: 0.95rem;
     color: #7eddb8;
     margin: 0;
     white-space: nowrap;
@@ -136,7 +134,7 @@ const COMPONENT_CSS = `
 }
 
 .geodash-shabbat {
-    display: flex;
+    display: none;
     align-items: baseline;
     gap: 5px;
     font-variant-numeric: tabular-nums;
@@ -311,6 +309,7 @@ function renderHeader(activePage) {
 
     // Pages
     const pageLinks = [
+        { href: '/', label: 'HOME', id: 'live' },
         { href: '/history', label: 'HISTORY', id: 'history' },
         { href: '/news', label: 'NEWS', id: 'news' },
         { href: '/alerts-news', label: 'ALERTS+NEWS', id: 'alerts-news' },
@@ -367,7 +366,7 @@ function renderHeader(activePage) {
         </div>
         <div class="geodash-clocks">
             <div class="geodash-shabbat" id="shabbat-times"></div>
-            <span class="geodash-clock-separator" id="shabbat-separator" style="display:none">|</span>
+            <span class="geodash-clock-separator" id="shabbat-separator" style="display:none"></span>
             <div class="geodash-clock-block">
                 <span class="geodash-clock-label">Israel</span>
                 <span class="geodash-clock-time" id="clock-local">--:--</span>
