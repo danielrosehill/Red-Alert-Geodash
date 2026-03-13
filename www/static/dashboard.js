@@ -9,6 +9,7 @@ fetch('/api/check-auth').catch(() => {});
 // ── Translations ──────────────────────────────────────────────────────────────
 
 let areaTranslations = {};
+let areaRegions = {};
 
 async function loadTranslations() {
     try {
@@ -19,9 +20,23 @@ async function loadTranslations() {
     }
 }
 
+async function loadAreaRegions() {
+    try {
+        const resp = await fetch("/api/area-regions");
+        if (resp.ok) areaRegions = await resp.json();
+    } catch (e) {
+        console.warn("Could not load area regions:", e);
+    }
+}
+
 function translateArea(hebrewName) {
     if (!hebrewName) return hebrewName;
     return areaTranslations[hebrewName] || hebrewName;
+}
+
+function getRegion(hebrewName) {
+    if (!hebrewName || !areaRegions[hebrewName]) return '';
+    return areaRegions[hebrewName].region_en || '';
 }
 
 const TITLE_TRANSLATIONS = {
@@ -101,6 +116,20 @@ const CATEGORY_LABELS = {
     7: "🌍 Earthquake", 8: "🌍 Earthquake", 9: "☢️ CBRNE", 10: "🔫 Infiltration",
     11: "🌊 Tsunami", 12: "⚠️ Hazmat", 13: "✅ All Clear", 14: "⏳ Early Warning",
 };
+
+// Shelter instruction titles — post-event messages that should show as all-clear
+const SHELTER_TITLES_HE = [
+    "האירוע הסתיים",
+    "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",
+    "סיום שהייה בסמיכות למרחב המוגן",
+    "יש לשהות בסמיכות למרחב המוגן",
+    "מגן אך יש להישאר בקרבתו",
+];
+
+function isShelterInstruction(title) {
+    if (!title) return false;
+    return SHELTER_TITLES_HE.some(t => title.includes(t) || t.includes(title));
+}
 
 // Polygons are invisible by default — no outlines shown
 const DEFAULT_STYLE = {
@@ -357,8 +386,23 @@ const mapJerusalemWide = L.map("map-jerusalem-wide", {
 }).setView(JERUSALEM_WIDE_CENTER, 10);
 
 const mapCountry = L.map("map-country", {
-    zoomControl: false, attributionControl: false,
+    zoomControl: true, attributionControl: false,
 }).setView(ISRAEL_CENTER, 8);
+
+// Track user interaction to pause auto-zoom
+let userInteractedWithMap = false;
+let userInteractionTimer = null;
+mapCountry.on('dragstart zoomstart', (e) => {
+    // Ignore programmatic zoom/pan (from autoZoomToAlerts)
+    if (e.originalEvent || e.type === 'dragstart') {
+        userInteractedWithMap = true;
+        if (userInteractionTimer) clearTimeout(userInteractionTimer);
+        // Resume auto-zoom after 2 minutes of no interaction
+        userInteractionTimer = setTimeout(() => {
+            userInteractedWithMap = false;
+        }, 120000);
+    }
+});
 
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalem);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalemWide);
@@ -402,9 +446,10 @@ async function loadPolygons() {
         const jerusalemWidePoly = L.polygon(coords, { ...DEFAULT_STYLE }).addTo(mapJerusalemWide);
         const jerusalemPoly = L.polygon(coords, { ...DEFAULT_STYLE }).addTo(mapJerusalem);
 
-        countryPoly.bindTooltip(name, { sticky: true, direction: "top" });
-        jerusalemWidePoly.bindTooltip(name, { sticky: true, direction: "top" });
-        jerusalemPoly.bindTooltip(name, { sticky: true, direction: "top" });
+        const displayName = translateArea(name) || name;
+        countryPoly.bindTooltip(displayName, { sticky: true, direction: "top" });
+        jerusalemWidePoly.bindTooltip(displayName, { sticky: true, direction: "top" });
+        jerusalemPoly.bindTooltip(displayName, { sticky: true, direction: "top" });
 
         areaLayers[name] = {
             country: countryPoly,
@@ -415,6 +460,49 @@ async function loadPolygons() {
         const center = getPolygonCenter(coords);
         if (center) areaCenters[name] = center;
     }
+}
+
+// ── Tooltip Helpers ─────────────────────────────────────────────────────────────
+
+function formatAlertAge(epochSec) {
+    const diffMs = Date.now() - epochSec * 1000;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin === 1) return '1 min ago';
+    if (diffMin < 60) return `${diffMin} mins ago`;
+    if (diffHr === 1) return '1 hour ago';
+    return `${diffHr} hours ago`;
+}
+
+function updateAreaTooltip(name, alertInfo) {
+    const layers = areaLayers[name];
+    if (!layers) return;
+
+    const englishName = translateArea(name);
+    let content = englishName;
+
+    if (alertInfo) {
+        const label = translateTitle(alertInfo.title) || CATEGORY_LABELS[alertInfo.category] || 'Alert';
+        const presumedStr = alertInfo.presumed ? ' (presumed)' : '';
+        const ageStr = alertInfo.alertStartTime ? formatAlertAge(alertInfo.alertStartTime) : '';
+
+        content = `<b>${englishName}</b><br>${label}${presumedStr}`;
+        if (ageStr) content += `<br>${ageStr}`;
+    }
+
+    layers.country.setTooltipContent(content);
+    layers.jerusalemWide.setTooltipContent(content);
+    layers.jerusalem.setTooltipContent(content);
+}
+
+function resetAreaTooltip(name) {
+    const layers = areaLayers[name];
+    if (!layers) return;
+    const content = translateArea(name);
+    layers.country.setTooltipContent(content);
+    layers.jerusalemWide.setTooltipContent(content);
+    layers.jerusalem.setTooltipContent(content);
 }
 
 // ── Alert Processing ───────────────────────────────────────────────────────────
@@ -479,7 +567,7 @@ function addToHistory(area, category, title, alert_type) {
         time: timeStr,
         area: area,
         category: category,
-        label: (alert_type === 'test' ? 'TEST ' : '') + (CATEGORY_LABELS[category] || `Cat ${category}`),
+        label: (alert_type === 'test' ? 'TEST ' : '') + (translateTitle(title) || CATEGORY_LABELS[category] || `Cat ${category}`),
         title: title,
         alert_type: alert_type,
     });
@@ -499,11 +587,12 @@ function renderAlertFeed() {
     }
 
     feed.innerHTML = alertHistory.map(entry => {
-        const catClass = entry.category === 13 ? 'cat-13' : entry.category === 14 ? 'cat-14' : '';
+        const effectiveCat = (entry.category !== 13 && isShelterInstruction(entry.title)) ? 13 : entry.category;
+        const catClass = effectiveCat === 13 ? 'cat-13' : effectiveCat === 14 ? 'cat-14' : '';
         return `<div class="alert-item">
             <span class="alert-time">${entry.time}</span>
             <span class="alert-type ${catClass}">${escapeHtml(entry.label)}</span>
-            <div class="alert-area">${escapeHtml(translateArea(entry.area))}</div>
+            <div class="alert-area">${escapeHtml(translateArea(entry.area))}${getRegion(entry.area) ? ` <span class="alert-region">(${escapeHtml(getRegion(entry.area))})</span>` : ''}</div>
         </div>`;
     }).join('');
 }
@@ -512,8 +601,13 @@ function processAlerts(alerts) {
     const newAlerts = new Map();
 
     for (const alert of alerts) {
-        const { data: area, category, title, alertDate, alert_type } = alert;
-        newAlerts.set(area, { category, title, alertDate, alert_type });
+        let { data: area, category, title, alertDate, alert_type, alertStartTime, presumed } = alert;
+        // Shelter instructions (e.g. "leave shelter, stay nearby") may arrive
+        // with wrong category (e.g. 10). Remap to 13 (all-clear).
+        if (category !== 13 && isShelterInstruction(title)) {
+            category = 13;
+        }
+        newAlerts.set(area, { category, title, alertDate, alert_type, alertStartTime, presumed });
     }
 
     // Check if local area alert has cleared — announce all-clear via TTS
@@ -529,6 +623,7 @@ function processAlerts(alerts) {
         if (!newAlerts.has(area)) {
             stopFlash(area);
             setAreaStyle(area, "#4ecca3", 0.4);
+            resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
                 setAreaStyle(area, "transparent", 0);
@@ -548,6 +643,7 @@ function processAlerts(alerts) {
         if (info.category === 13) {
             stopFlash(area);
             setAreaStyle(area, "#4ecca3", 0.4);
+            resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
                 setAreaStyle(area, "transparent", 0);
@@ -561,6 +657,7 @@ function processAlerts(alerts) {
             stopFlash(area);
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
             setAreaStyle(area, "#ff9800", 0.45);
+            updateAreaTooltip(area, info);
 
             if (isNew && area === LOCAL_AREA) {
                 showLocalAlert('warning', info.title);
@@ -568,7 +665,10 @@ function processAlerts(alerts) {
         } else {
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
             setAreaStyle(area, color, 0.6);
-            flashArea(area);
+            if (!info.presumed) {
+                flashArea(area);
+            }
+            updateAreaTooltip(area, info);
 
             if (isNew && area === LOCAL_AREA) {
                 showLocalAlert('red', info.title);
@@ -609,7 +709,7 @@ function processAlerts(alerts) {
     if (newAlerts.has(LOCAL_AREA)) {
         const localInfo = newAlerts.get(LOCAL_AREA);
         if (localInfo.category !== 13) {
-            monStatus.textContent = CATEGORY_LABELS[localInfo.category] || localInfo.title;
+            monStatus.textContent = translateTitle(localInfo.title) || CATEGORY_LABELS[localInfo.category] || localInfo.title;
             monStatus.style.color = CATEGORY_COLORS[localInfo.category] || '#e94560';
         } else {
             monStatus.textContent = 'All clear';
@@ -646,6 +746,9 @@ const MAP_DEFAULT_CENTER = ISRAEL_CENTER;
 const MAP_DEFAULT_ZOOM = 8;
 
 function autoZoomToAlerts(alerts) {
+    // Skip auto-zoom when user is manually navigating the map
+    if (userInteractedWithMap) return;
+
     const activeAreas = [];
     for (const [area, info] of alerts) {
         if (info.category !== 13 && info.category !== 14 && info.category < 15) {
@@ -798,7 +901,7 @@ function buildAreaSelector() {
 }
 
 async function init() {
-    await loadTranslations();
+    await Promise.all([loadTranslations(), loadAreaRegions()]);
     buildAreaSelector();
 
     // Set initial monitoring area name and status
@@ -853,11 +956,12 @@ async function init() {
                     timeZone: 'Asia/Jerusalem', hour12: false,
                     hour: '2-digit', minute: '2-digit',
                 });
+                const effectiveCat = (entry.category !== 13 && isShelterInstruction(entry.title)) ? 13 : entry.category;
                 alertHistory.push({
                     time: timeStr,
                     area: entry.area,
-                    category: entry.category,
-                    label: CATEGORY_LABELS[entry.category] || `Cat ${entry.category}`,
+                    category: effectiveCat,
+                    label: translateTitle(entry.title) || CATEGORY_LABELS[effectiveCat] || `Cat ${effectiveCat}`,
                     title: entry.title,
                 });
             }

@@ -1,6 +1,10 @@
 # Red Alert Geodash
 
+![Red Alert Geodash on Android Tablet](screenshots/tablet-red-alert.jpg)
+
 Real-time dashboard for Israel's Homefront Command (Pikud HaOref) rocket and situation alerts, displayed on interactive maps with polygon overlays covering 1,450 alert areas.
+
+![Dashboard All Clear on Tablet](screenshots/tablet-dashboard.jpg)
 
 > **This application only works when hosted from an Israeli IP address.** The Oref alert API is geo-restricted to Israel. The backend must run from an Israeli server or through a proxy with an Israeli exit node.
 
@@ -46,6 +50,12 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 
 ### Settings — Monitoring Area and Notification Preferences
 ![Settings](screenshots/image(4).png)
+
+### Android Tablet — Dashboard (All Clear)
+![Tablet Dashboard](screenshots/tablet-dashboard.jpg)
+
+### Android Tablet — Active Red Alert
+![Tablet Red Alert](screenshots/tablet-red-alert.jpg)
 
 ## Features
 

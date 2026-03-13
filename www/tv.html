@@ -85,6 +85,16 @@
             letter-spacing: 2px;
         }
 
+        .clock-block:last-child .clock-label {
+            color: #2a7a4a;
+        }
+
+        .clock-block:last-child .clock-time {
+            color: #3a9a5a;
+            font-size: 1.6rem;
+            font-weight: 500;
+        }
+
         #status-bar {
             display: -webkit-flex;
             display: flex;
@@ -359,9 +369,13 @@
             <div id="status-bar">
                 <span id="alert-count"></span>
                 <div id="status-indicator"></div>
-                <a href="/dashboard.html" class="view-switch" title="Switch to Desktop view">
+                <a href="/" class="view-switch" title="Switch to Web view">
                     <svg viewBox="0 0 24 24"><path d="M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>
-                    Desktop
+                    Web
+                </a>
+                <a href="/tablet" class="view-switch" title="Switch to Tablet view">
+                    <svg viewBox="0 0 24 24"><path d="M18.5 0h-14A2.5 2.5 0 0 0 2 2.5v19A2.5 2.5 0 0 0 4.5 24h14a2.5 2.5 0 0 0 2.5-2.5v-19A2.5 2.5 0 0 0 18.5 0zm-7 23c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm7.5-4H4V3h15v16z"/></svg>
+                    Tablet
                 </a>
             </div>
         </header>
