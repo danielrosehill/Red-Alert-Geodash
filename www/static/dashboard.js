@@ -117,6 +117,46 @@ const CATEGORY_LABELS = {
     11: "🌊 Tsunami", 12: "⚠️ Hazmat", 13: "✅ All Clear", 14: "⏳ Early Warning",
 };
 
+// Short display labels — matched against Hebrew source strings (authoritative).
+// HFC uses inconsistent titles for the same instruction, so we group them.
+// Each entry: [hebrew substring, short English label]
+const SHORT_TITLE_RULES = [
+    // Active threats
+    ["ירי רקטות וטילים", "Rockets"],
+    ["ירי רקטות", "Rockets"],
+    ["טיל בליסטי", "Ballistic"],
+    ["כלי טיס עוין", "Aircraft"],
+    ["חדירת כלי טיס", "Aircraft"],
+    ["חדירת מחבלים", "Infiltration"],
+    ["רעידת אדמה", "Earthquake"],
+    ["צונאמי", "Tsunami"],
+    ["חומרים מסוכנים", "Hazmat"],
+    ["אירוע רדיולוגי", "Radiological"],
+    // Shelter instructions — all effectively mean "get to shelter now"
+    ["היכנסו למרחב המוגן", "⚠ Get To Shelter"],
+    ["היכנס למרחב המוגן", "⚠ Get To Shelter"],
+    ["הגיעו למרחב המוגן", "⚠ Get To Shelter"],
+    ["בדקות הקרובות צפויות להתקבל התרעות", "⚠ Get To Shelter"],
+    ["התרעת קדם", "⚠ Get To Shelter"],
+    // Post-event — stay near / leave shelter
+    ["האירוע הסתיים", "All Clear"],
+    ["ניתן לצאת מהמרחב המוגן", "Leave Shelter"],
+    ["סיום שהייה בסמיכות למרחב המוגן", "Leave Shelter"],
+    ["יש לשהות בסמיכות למרחב המוגן", "Stay Near Shelter"],
+    ["מגן אך יש להישאר בקרבתו", "Stay Near Shelter"],
+    // Shore evacuation
+    ["התרחקו מהחוף", "Shore Evac"],
+];
+
+function shortTitle(hebrewTitle) {
+    if (!hebrewTitle) return hebrewTitle;
+    for (const [he, label] of SHORT_TITLE_RULES) {
+        if (hebrewTitle.includes(he)) return label;
+    }
+    // Fallback to English translation
+    return translateTitle(hebrewTitle) || hebrewTitle;
+}
+
 // Shelter instruction titles — post-event messages that should show as all-clear
 const SHELTER_TITLES_HE = [
     "האירוע הסתיים",
@@ -170,9 +210,17 @@ function isAudioEnabled() {
     return localStorage.getItem('geodash-audio') !== 'false';
 }
 
-function isSpeechEnabled() {
-    return localStorage.getItem('geodash-speech') !== 'false';
+// TTS mode: 'chatty' = all alerts, 'local' = local area + mass (50+), 'off' = silent
+function getTtsModeLocal() {
+    return (typeof getTtsMode === 'function') ? getTtsMode() : 'local';
 }
+
+function isSpeechEnabled() {
+    return getTtsModeLocal() !== 'off';
+}
+
+const MASS_ALERT_THRESHOLD = 50;
+let massAlertShownForCycle = false; // prevent repeated popups within same escalation
 
 function playRedAlertTone() {
     if (!isAudioEnabled()) return;
@@ -218,8 +266,11 @@ function playWarningTone() {
     }
 }
 
-function speakAlert(message) {
-    if (!isSpeechEnabled()) return;
+// scope: 'local' = local area alerts, 'mass' = mass alert (50+), 'nationwide' = all other alerts
+function speakAlert(message, scope) {
+    const mode = getTtsModeLocal();
+    if (mode === 'off') return;
+    if (mode === 'local' && scope === 'nationwide') return; // local mode skips nationwide chatter
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(message);
@@ -264,21 +315,21 @@ function showLocalAlert(type, title) {
         overlay.classList.add('active-red');
         playRedAlertTone();
         setTimeout(() => {
-            speakAlert(`Red alert. ${title}. Jerusalem ${areaEn}. Take shelter immediately.`);
+            speakAlert(`Red alert. ${title}. Jerusalem ${areaEn}. Take shelter immediately.`, 'local');
         }, 2500);
     } else if (type === 'warning') {
         text.textContent = `WARNING \u2014 ${title}`;
         overlay.classList.add('active-warning');
         playWarningTone();
         setTimeout(() => {
-            speakAlert(`Warning. ${title}. Jerusalem ${areaEn}. Be prepared.`);
+            speakAlert(`Warning. ${title}. Jerusalem ${areaEn}. Be prepared.`, 'local');
         }, 1800);
     } else if (type === 'allclear') {
         text.textContent = `ALL CLEAR \u2014 Event Concluded`;
         overlay.classList.add('active-allclear');
         playAllClearTone();
         setTimeout(() => {
-            speakAlert(`All clear. The event in Jerusalem ${areaEn} has concluded. You may leave the shelter.`);
+            speakAlert(`All clear. The event in Jerusalem ${areaEn} has concluded. You may leave the shelter.`, 'local');
         }, 1000);
     }
 
@@ -315,30 +366,26 @@ function hideLocalAlert() {
 
 // Clock handled by components.js renderHeader()
 
-// ── Refresh Button ────────────────────────────────────────────────────────────
+// ── Refresh Button (legacy — now in header via components.js) ────────────────
+const legacyRefreshBtn = document.getElementById('refresh-btn');
+if (legacyRefreshBtn) legacyRefreshBtn.addEventListener('click', () => window.location.reload());
 
-document.getElementById('refresh-btn').addEventListener('click', () => {
-    window.location.reload();
-});
+// ── Test Modal & Alert Buttons ────────────────────────────────────────────────
 
-// ── Test Alert Buttons ────────────────────────────────────────────────────────
+let testCountdownTimer = null;
 
-async function sendTestAlert(category, duration) {
-    const clearBtn = document.getElementById('test-clear-btn');
+async function sendTestAlert(category, duration, customTitle) {
     try {
-        const title = category === 1 ? 'ירי רקטות וטילים'
+        const title = customTitle
+            || (category === 1 ? 'ירי רקטות וטילים'
             : category === 14 ? 'בדקות הקרובות צפויות להתקבל התרעות באזורך'
-            : 'האירוע הסתיים';
+            : 'האירוע הסתיים');
         const resp = await fetch('/api/test-alert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ area: LOCAL_AREA, category, title, duration }),
         });
         if (resp.ok) {
-            clearBtn.style.display = 'inline-block';
-            setTimeout(() => {
-                clearBtn.style.display = 'none';
-            }, duration * 1000);
             pollAlerts();
         }
     } catch (e) {
@@ -346,21 +393,97 @@ async function sendTestAlert(category, duration) {
     }
 }
 
-document.getElementById('test-red-btn').addEventListener('click', () => sendTestAlert(1, 30));
-document.getElementById('test-warning-btn').addEventListener('click', () => sendTestAlert(14, 30));
-document.getElementById('test-allclear-btn').addEventListener('click', () => {
-    // All-clear shows the overlay directly (no backend injection needed)
-    showLocalAlert('allclear', 'האירוע הסתיים');
+function showTestCountdown(label, seconds, callback) {
+    const el = document.getElementById('test-countdown');
+    if (!el) return;
+    let remaining = seconds;
+    el.textContent = `${label} in ${remaining}s...`;
+    if (testCountdownTimer) clearInterval(testCountdownTimer);
+    testCountdownTimer = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(testCountdownTimer);
+            testCountdownTimer = null;
+            el.textContent = `${label} — FIRING NOW`;
+            setTimeout(() => { el.textContent = ''; }, 3000);
+            callback();
+        } else {
+            el.textContent = `${label} in ${remaining}s...`;
+        }
+    }, 1000);
+}
+
+function showNuclearAlert() {
+    const overlay = document.getElementById('local-alert-overlay');
+    const text = document.getElementById('local-alert-text');
+    overlay.classList.remove('active-red', 'active-warning', 'active-allclear');
+
+    text.textContent = '☢️ NUCLEAR LAUNCH DETECTED ☢️';
+    overlay.classList.add('active-red');
+    playRedAlertTone();
+    localAlertActive = true;
+
+    setTimeout(() => {
+        speakAlert('Nuclear launch detected. This is a test. Seek immediate shelter underground.', 'local');
+    }, 2500);
+
+    if (localAlertMinTimer) clearTimeout(localAlertMinTimer);
+    localAlertMinTimer = setTimeout(() => {
+        localAlertMinTimer = null;
+        hideLocalAlert();
+    }, LOCAL_ALERT_MIN_DURATION);
+}
+
+// Test modal open/close
+const testModalOpenBtn = document.getElementById('test-modal-open-btn');
+const testModal = document.getElementById('test-modal');
+const testModalClose = document.getElementById('test-modal-close');
+
+if (testModalOpenBtn && testModal) {
+    testModalOpenBtn.addEventListener('click', () => testModal.classList.add('active'));
+}
+if (testModalClose && testModal) {
+    testModalClose.addEventListener('click', () => testModal.classList.remove('active'));
+}
+if (testModal) {
+    testModal.addEventListener('click', (e) => {
+        if (e.target === testModal) testModal.classList.remove('active');
+    });
+}
+
+// Instant test buttons
+const testRedBtn = document.getElementById('test-red-btn');
+if (testRedBtn) testRedBtn.addEventListener('click', () => sendTestAlert(1, 30));
+
+const testWarningBtn = document.getElementById('test-warning-btn');
+if (testWarningBtn) testWarningBtn.addEventListener('click', () => sendTestAlert(14, 30));
+
+const testAllClearBtn = document.getElementById('test-allclear-btn');
+if (testAllClearBtn) testAllClearBtn.addEventListener('click', () => showLocalAlert('allclear', 'האירוע הסתיים'));
+
+const testClearBtn = document.getElementById('test-clear-btn');
+if (testClearBtn) testClearBtn.addEventListener('click', async () => {
+    try { await fetch('/api/test-alert', { method: 'DELETE' }); } catch (e) {}
+    pollAlerts();
 });
 
-document.getElementById('test-clear-btn').addEventListener('click', async () => {
-    try {
-        await fetch('/api/test-alert', { method: 'DELETE' });
-    } catch (e) {
-        console.error('Failed to clear test alerts:', e);
-    }
-    document.getElementById('test-clear-btn').style.display = 'none';
-    pollAlerts();
+// Delayed test buttons
+const testDelayedRedBtn = document.getElementById('test-delayed-red-btn');
+if (testDelayedRedBtn) testDelayedRedBtn.addEventListener('click', () => {
+    testDelayedRedBtn.disabled = true;
+    showTestCountdown('🚀 Red Alert', 60, () => {
+        sendTestAlert(1, 30);
+        testDelayedRedBtn.disabled = false;
+    });
+});
+
+const testNukeBtn = document.getElementById('test-nuke-btn');
+if (testNukeBtn) testNukeBtn.addEventListener('click', () => {
+    testNukeBtn.disabled = true;
+    showTestCountdown('☢️ Nuclear Launch Detected', 30, () => {
+        showNuclearAlert();
+        testNukeBtn.disabled = false;
+    });
 });
 
 // ── Alert Dismiss ────────────────────────────────────────────────────────────
@@ -370,10 +493,27 @@ document.getElementById('local-alert-dismiss').addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && localAlertActive) {
-        dismissLocalAlert();
+    if (e.key === 'Escape') {
+        if (localAlertActive) dismissLocalAlert();
+        const massOverlay = document.getElementById('mass-alert-overlay');
+        if (massOverlay && massOverlay.classList.contains('active')) {
+            massOverlay.classList.remove('active');
+        }
+        const testModal = document.getElementById('test-modal');
+        if (testModal && testModal.classList.contains('active')) {
+            testModal.classList.remove('active');
+        }
     }
 });
+
+// Mass alert dismiss
+const massAlertDismissBtn = document.getElementById('mass-alert-dismiss');
+if (massAlertDismissBtn) {
+    massAlertDismissBtn.addEventListener('click', () => {
+        const overlay = document.getElementById('mass-alert-overlay');
+        if (overlay) overlay.classList.remove('active');
+    });
+}
 
 // ── Maps (3 maps: country, jerusalem wide, jerusalem city) ────────────────────
 
@@ -407,6 +547,23 @@ mapCountry.on('dragstart zoomstart', (e) => {
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalem);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalemWide);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapCountry);
+
+// Apply initial map lock state
+if (mapsLocked) {
+    setMapInteraction(mapCountry, false);
+    setMapInteraction(mapJerusalemWide, false);
+    setMapInteraction(mapJerusalem, false);
+}
+
+// Map lock button handler
+const mapLockBtn = document.getElementById('map-lock-btn');
+if (mapLockBtn) {
+    // Set initial state
+    mapLockBtn.textContent = mapsLocked ? '🔒' : '🔓';
+    mapLockBtn.title = mapsLocked ? 'Maps locked — click to unlock' : 'Maps unlocked — click to lock';
+    if (!mapsLocked) mapLockBtn.classList.add('unlocked');
+    mapLockBtn.addEventListener('click', () => applyMapLock(!mapsLocked));
+}
 
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = function () {
@@ -567,7 +724,7 @@ function addToHistory(area, category, title, alert_type) {
         time: timeStr,
         area: area,
         category: category,
-        label: (alert_type === 'test' ? 'TEST ' : '') + (translateTitle(title) || CATEGORY_LABELS[category] || `Cat ${category}`),
+        label: (alert_type === 'test' ? 'TEST ' : '') + (shortTitle(title) || CATEGORY_LABELS[category] || `Cat ${category}`),
         title: title,
         alert_type: alert_type,
     });
@@ -613,7 +770,7 @@ function processAlerts(alerts) {
     // Check if local area alert has cleared — announce all-clear via TTS
     if (localAlertActive && !newAlerts.has(LOCAL_AREA)) {
         hideLocalAlert();
-        speakAlert('All clear. The event in your area has concluded.');
+        speakAlert('All clear. The event in your area has concluded.', 'local');
     }
 
     // Track new areas for history feed
@@ -686,6 +843,10 @@ function processAlerts(alerts) {
         renderAlertFeed();
     }
 
+    const activeCount = [...newAlerts.values()].filter(
+        a => a.category !== 13 && a.category !== 14
+    ).length;
+
     // TTS for nationwide alerts (excludes local area which has its own TTS)
     if (newAreas.length > 0 && isSpeechEnabled()) {
         const nonLocalNew = newAreas.filter(e => e.area !== LOCAL_AREA && e.category !== 13 && e.category !== 14);
@@ -694,15 +855,18 @@ function processAlerts(alerts) {
             const more = nonLocalNew.length > 5 ? ` and ${nonLocalNew.length - 5} more` : '';
             const msg = `${nonLocalNew.length} alert${nonLocalNew.length > 1 ? 's' : ''} across Israel, including ${areaNames}${more}.`;
             // Delay to avoid overlapping with local area TTS
-            setTimeout(() => speakAlert(msg), localAlertActive ? 6000 : 500);
+            setTimeout(() => speakAlert(msg, 'nationwide'), localAlertActive ? 6000 : 500);
         }
         // TTS for all-clear events nationwide
         const allClearNew = newAreas.filter(e => e.category === 13);
         if (allClearNew.length > 0 && nonLocalNew.length === 0) {
             const clearNames = allClearNew.slice(0, 3).map(e => translateArea(e.area)).join(', ');
-            speakAlert(`All clear in ${clearNames}.`);
+            speakAlert(`All clear in ${clearNames}.`, 'nationwide');
         }
     }
+
+    // Mass alert popup — show when 50+ active alerts in Israel
+    checkMassAlert(activeCount);
 
     // Update monitoring status
     const monStatus = document.getElementById('monitoring-status');
@@ -719,10 +883,6 @@ function processAlerts(alerts) {
         monStatus.textContent = 'All clear';
         monStatus.style.color = '#7eddb8';
     }
-
-    const activeCount = [...newAlerts.values()].filter(
-        a => a.category !== 13 && a.category !== 14
-    ).length;
 
     const countEl = document.getElementById("alert-count");
     if (activeCount > 0) {
@@ -768,6 +928,75 @@ function autoZoomToAlerts(alerts) {
     }
 }
 
+
+// ── Mass Alert Popup ────────────────────────────────────────────────────────
+
+function checkMassAlert(activeCount) {
+    const overlay = document.getElementById('mass-alert-overlay');
+    if (!overlay) return;
+
+    if (activeCount >= MASS_ALERT_THRESHOLD) {
+        if (!massAlertShownForCycle) {
+            massAlertShownForCycle = true;
+            const text = document.getElementById('mass-alert-text');
+            if (text) text.textContent = `${activeCount} ACTIVE ALERTS ACROSS ISRAEL`;
+            overlay.classList.add('active');
+            speakAlert(`Mass alert. ${activeCount} active alerts across Israel. Stay alert.`, 'mass');
+        } else {
+            // Update count if already showing
+            const text = document.getElementById('mass-alert-text');
+            if (text) text.textContent = `${activeCount} ACTIVE ALERTS ACROSS ISRAEL`;
+        }
+    } else {
+        if (massAlertShownForCycle) {
+            overlay.classList.remove('active');
+            massAlertShownForCycle = false;
+        }
+    }
+}
+
+// ── Map Lock ────────────────────────────────────────────────────────────────
+
+function isMapLockDefault() {
+    const saved = localStorage.getItem('geodash-map-lock-default');
+    return saved !== 'false'; // locked by default
+}
+
+let mapsLocked = isMapLockDefault();
+
+function setMapInteraction(map, enabled) {
+    if (enabled) {
+        map.dragging.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.scrollWheelZoom.enable();
+        map.boxZoom.enable();
+        map.keyboard.enable();
+        if (map.tap) map.tap.enable();
+    } else {
+        map.dragging.disable();
+        map.touchZoom.disable();
+        map.doubleClickZoom.disable();
+        map.scrollWheelZoom.disable();
+        map.boxZoom.disable();
+        map.keyboard.disable();
+        if (map.tap) map.tap.disable();
+    }
+}
+
+function applyMapLock(locked) {
+    mapsLocked = locked;
+    setMapInteraction(mapCountry, !locked);
+    setMapInteraction(mapJerusalemWide, !locked);
+    setMapInteraction(mapJerusalem, !locked);
+    // Update button state
+    const btn = document.getElementById('map-lock-btn');
+    if (btn) {
+        btn.textContent = locked ? '🔒' : '🔓';
+        btn.title = locked ? 'Maps locked — click to unlock' : 'Maps unlocked — click to lock';
+        btn.classList.toggle('unlocked', !locked);
+    }
+}
 
 // ── Alert Flash Bar ─────────────────────────────────────────────────────────
 
@@ -961,7 +1190,7 @@ async function init() {
                     time: timeStr,
                     area: entry.area,
                     category: effectiveCat,
-                    label: translateTitle(entry.title) || CATEGORY_LABELS[effectiveCat] || `Cat ${effectiveCat}`,
+                    label: shortTitle(entry.title) || CATEGORY_LABELS[effectiveCat] || `Cat ${effectiveCat}`,
                     title: entry.title,
                 });
             }

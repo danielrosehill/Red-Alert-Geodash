@@ -302,6 +302,18 @@
             0%, 100% { background: rgba(255, 152, 0, 0.1); }
             50% { background: rgba(255, 152, 0, 0.25); }
         }
+
+        .mass-alert-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 9998;
+            background: rgba(180, 30, 30, 0.25);
+            justify-content: center;
+            align-items: center;
+        }
+        .mass-alert-overlay.active { display: flex; }
     </style>
 </head>
 <body>
@@ -341,13 +353,29 @@
     <span id="payload-indicator" style="display:none"><span id="payload-dot"></span></span>
     <div id="status-indicator" style="display:none"></div>
     <button id="refresh-btn" style="display:none"></button>
+    <button id="map-lock-btn" style="display:none"></button>
     <div id="area-selector" style="display:none"></div>
     <div id="alert-feed" style="display:none"></div>
-    <div id="test-alert-group" style="display:none">
+    <div style="display:none">
+        <button id="test-modal-open-btn"></button>
+        <div id="test-modal"></div>
         <button id="test-red-btn"></button>
         <button id="test-warning-btn"></button>
         <button id="test-allclear-btn"></button>
         <button id="test-clear-btn"></button>
+        <button id="test-delayed-red-btn"></button>
+        <button id="test-nuke-btn"></button>
+        <button id="test-modal-close"></button>
+        <div id="test-countdown"></div>
+    </div>
+
+    <!-- Mass alert overlay (50+ alerts) -->
+    <div id="mass-alert-overlay" class="mass-alert-overlay">
+        <div style="background:rgba(180,30,30,0.92);padding:30px 40px;border-radius:16px;text-align:center;box-shadow:0 0 80px rgba(233,69,96,0.6);">
+            <div id="mass-alert-text" style="font-size:2rem;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:2px;">50+ ACTIVE ALERTS</div>
+            <div style="font-size:1rem;color:rgba(255,255,255,0.8);margin-top:8px;font-weight:600;">Widespread attack in progress</div>
+            <button id="mass-alert-dismiss" style="margin-top:16px;background:rgba(0,0,0,0.4);color:#fff;border:2px solid rgba(255,255,255,0.5);padding:8px 24px;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer;">Dismiss</button>
+        </div>
     </div>
 
     <!-- Full-screen alert overlay -->
@@ -359,8 +387,8 @@
     <div id="geodash-footer"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/components.js?v=3"></script>
+    <script src="/static/components.js?v=4"></script>
     <script>renderHeader('tablet'); renderFooter();</script>
-    <script src="/static/dashboard.js?v=9"></script>
+    <script src="/static/dashboard.js?v=10"></script>
 </body>
 </html>

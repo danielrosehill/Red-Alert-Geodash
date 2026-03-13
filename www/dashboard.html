@@ -74,17 +74,18 @@
         }
         #alert-count.active { display: inline-block; }
 
-        #refresh-btn {
+        .map-lock-btn {
             background: none;
             border: 1px solid #0f3460;
             color: #ccd;
-            padding: 6px 14px;
+            padding: 4px 10px;
             border-radius: 4px;
-            font-size: 0.85rem;
+            font-size: 1rem;
             cursor: pointer;
             transition: all 0.2s;
         }
-        #refresh-btn:hover { color: #eee; border-color: #7eddb8; }
+        .map-lock-btn:hover { border-color: #7eddb8; }
+        .map-lock-btn.unlocked { border-color: #7eddb8; color: #7eddb8; }
 
         /* Nav tabs handled by components.js */
 
@@ -260,48 +261,114 @@
             50% { background: #e07800; }
         }
 
-        .test-alert-group {
-            display: flex;
-            gap: 4px;
-            margin-left: auto;
-            flex-shrink: 0;
-        }
-        .test-alert-btn {
+        .test-modal-open-btn {
             background: #0f3460;
             border: 1px solid #2a4a80;
             color: #aab;
-            padding: 4px 10px;
+            padding: 4px 12px;
             border-radius: 4px;
-            font-size: 0.72rem;
+            font-size: 0.75rem;
             font-weight: 700;
             cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
             flex-shrink: 0;
             transition: all 0.2s;
+            margin-left: auto;
         }
-        .test-alert-btn.test-red:hover {
-            color: #fff;
-            border-color: #e94560;
-            background: #e94560;
+        .test-modal-open-btn:hover { color: #fff; border-color: #7eddb8; }
+
+        /* ── Test Modal ─────────────────────────────────────── */
+        .test-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 8000;
+            background: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
         }
-        .test-alert-btn.test-warning:hover {
-            color: #fff;
-            border-color: #ff9800;
-            background: #ff9800;
+        .test-modal.active { display: flex; }
+        .test-modal-content {
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            width: 480px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
         }
-        .test-alert-btn.test-allclear:hover {
-            color: #fff;
-            border-color: #4ecca3;
-            background: #2a6b55;
+        .test-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #0f3460;
         }
-        .test-alert-btn.test-clear {
-            border-color: #889;
+        .test-modal-header h2 {
+            color: #7eddb8;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin: 0;
         }
-        .test-alert-btn.test-clear:hover {
-            color: #fff;
-            border-color: #fff;
-            background: #555;
+        .test-modal-close {
+            background: none;
+            border: none;
+            color: #889;
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: color 0.2s;
+        }
+        .test-modal-close:hover { color: #fff; }
+        .test-modal-body { padding: 16px 20px; }
+        .test-section { margin-bottom: 16px; }
+        .test-section h3 {
+            font-size: 0.8rem;
+            color: #aab;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .test-btn-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .test-btn {
+            background: #0f3460;
+            border: 1px solid #2a4a80;
+            color: #dde;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+            min-width: 180px;
+            text-align: center;
+        }
+        .test-btn:hover { border-color: #7eddb8; color: #fff; }
+        .test-btn-red:hover { background: #e94560; border-color: #e94560; }
+        .test-btn-warning:hover { background: #ff9800; border-color: #ff9800; }
+        .test-btn-allclear:hover { background: #2a6b55; border-color: #4ecca3; }
+        .test-btn-clear:hover { background: #555; border-color: #889; }
+        .test-btn-delayed:hover { background: #3a3a8e; border-color: #6a6af0; }
+        .test-btn-nuke { border-color: #ff4444; color: #ff8888; }
+        .test-btn-nuke:hover { background: #8b0000; border-color: #ff0000; color: #fff; }
+        .test-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .test-countdown {
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: #ff9800;
+            font-weight: 700;
+            text-align: center;
+            min-height: 24px;
         }
 
         .leaflet-container { background: #e8e8e8; }
@@ -570,6 +637,63 @@
             0%, 100% { background: rgba(255, 152, 0, 0.1); }
             50% { background: rgba(255, 152, 0, 0.25); }
         }
+
+        /* ── Mass Alert Overlay ────────────────────────────── */
+        #mass-alert-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 9998;
+            background: rgba(180, 30, 30, 0.25);
+            justify-content: center;
+            align-items: center;
+            animation: mass-flash 1.5s infinite;
+        }
+        #mass-alert-overlay.active {
+            display: flex;
+        }
+        #mass-alert-content {
+            background: rgba(180, 30, 30, 0.92);
+            padding: 40px 60px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 0 80px rgba(233, 69, 96, 0.6);
+        }
+        #mass-alert-text {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        .mass-alert-sub {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.8);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+        #mass-alert-dismiss {
+            margin-top: 24px;
+            background: rgba(0,0,0,0.4);
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.5);
+            padding: 10px 30px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #mass-alert-dismiss:hover {
+            background: rgba(0,0,0,0.7);
+            border-color: #fff;
+        }
+        @keyframes mass-flash {
+            0%, 100% { background: rgba(180, 30, 30, 0.2); }
+            50% { background: rgba(180, 30, 30, 0.4); }
+        }
     </style>
 </head>
 <body>
@@ -578,7 +702,7 @@
         <span id="alert-count"></span>
         <span id="payload-indicator" title="Flashes when new data received from HFC">HFC <span id="payload-dot"></span></span>
         <div id="status-indicator"></div>
-        <button id="refresh-btn" title="Reload page">Refresh</button>
+        <button id="map-lock-btn" class="map-lock-btn" title="Maps locked — click to unlock">🔒</button>
     </div>
 
     <div class="main-content">
@@ -608,12 +732,7 @@
                 <span class="flashbar-label" id="flashbar-label">LIVE</span>
                 <span class="flashbar-text" id="flashbar-text">No active alerts</span>
                 <span class="flashbar-count" id="flashbar-count"></span>
-                <div class="test-alert-group" id="test-alert-group">
-                    <button class="test-alert-btn test-red" id="test-red-btn" title="Test red alert (rockets/missiles)">Test Red</button>
-                    <button class="test-alert-btn test-warning" id="test-warning-btn" title="Test early warning / pre-warning">Test Warning</button>
-                    <button class="test-alert-btn test-allclear" id="test-allclear-btn" title="Test all-clear notification">Test All Clear</button>
-                    <button class="test-alert-btn test-clear" id="test-clear-btn" title="Clear all test alerts" style="display:none">Clear Tests</button>
-                </div>
+                <button class="test-modal-open-btn" id="test-modal-open-btn" title="Open test panel">🧪 Test</button>
             </div>
         </div>
 
@@ -635,6 +754,44 @@
         </aside>
     </div>
 
+    <!-- Test Modal -->
+    <div id="test-modal" class="test-modal">
+        <div class="test-modal-content">
+            <div class="test-modal-header">
+                <h2>Test Alerts</h2>
+                <button class="test-modal-close" id="test-modal-close">✕</button>
+            </div>
+            <div class="test-modal-body">
+                <div class="test-section">
+                    <h3>Instant Tests</h3>
+                    <div class="test-btn-grid">
+                        <button class="test-btn test-btn-red" id="test-red-btn">🚀 Red Alert</button>
+                        <button class="test-btn test-btn-warning" id="test-warning-btn">⏳ Early Warning</button>
+                        <button class="test-btn test-btn-allclear" id="test-allclear-btn">✅ All Clear</button>
+                        <button class="test-btn test-btn-clear" id="test-clear-btn">🗑 Clear Tests</button>
+                    </div>
+                </div>
+                <div class="test-section">
+                    <h3>Delayed Tests</h3>
+                    <div class="test-btn-grid">
+                        <button class="test-btn test-btn-delayed" id="test-delayed-red-btn">🚀 Red Alert (1 min delay)</button>
+                        <button class="test-btn test-btn-nuke" id="test-nuke-btn">☢️ Nuclear Launch Detected (30s delay)</button>
+                    </div>
+                </div>
+                <div class="test-countdown" id="test-countdown"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mass alert overlay (50+ alerts nationwide) -->
+    <div id="mass-alert-overlay">
+        <div id="mass-alert-content">
+            <div id="mass-alert-text">50+ ACTIVE ALERTS ACROSS ISRAEL</div>
+            <div class="mass-alert-sub">Widespread attack in progress</div>
+            <button id="mass-alert-dismiss" title="Dismiss">Dismiss</button>
+        </div>
+    </div>
+
     <!-- Full-screen alert overlay for local area -->
     <div id="local-alert-overlay">
         <div id="local-alert-text"></div>
@@ -642,8 +799,8 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/components.js?v=3"></script>
+    <script src="/static/components.js?v=4"></script>
     <script>renderHeader('live'); renderFooter();</script>
-    <script src="/static/dashboard.js?v=9"></script>
+    <script src="/static/dashboard.js?v=10"></script>
 </body>
 </html>
