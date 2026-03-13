@@ -9,14 +9,13 @@ const COMPONENT_CSS = `
 /* ── Header ──────────────────────────────────────────── */
 .geodash-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     padding: 6px 12px;
     background: #16213e;
     border-bottom: 2px solid #0f3460;
     flex-shrink: 0;
     max-width: 100vw;
-    overflow: hidden;
     position: sticky;
     top: 0;
     z-index: 2000;
@@ -25,8 +24,11 @@ const COMPONENT_CSS = `
 .geodash-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px 10px;
     min-width: 0;
+    flex-wrap: wrap;
+    flex: 1;
+    margin-right: 12px;
 }
 
 .geodash-header-icon {
@@ -217,14 +219,29 @@ const COMPONENT_CSS = `
 }
 
 @media (max-width: 1200px) {
-    .geodash-header { padding: 4px 8px; gap: 6px; }
-    .geodash-header-left { gap: 6px; }
+    .geodash-header { padding: 4px 8px; }
+    .geodash-header-left { gap: 4px 8px; }
     .geodash-nav a { padding: 4px 8px; font-size: 0.72rem; }
     .geodash-ext-link { padding: 3px 6px; font-size: 0.72rem; }
     .geodash-clock-time { font-size: 1rem; }
     .geodash-header h1 { font-size: 0.9rem; }
     .geodash-nav-separator { margin: 0 3px; font-size: 0.9rem; }
     .geodash-clock-separator { margin: 0 6px; font-size: 1rem; }
+}
+
+@media (max-width: 900px) {
+    .geodash-header-left { gap: 3px 6px; }
+    .geodash-nav a { padding: 3px 6px; font-size: 0.68rem; letter-spacing: 0; }
+    .geodash-ext-link { padding: 2px 5px; font-size: 0.68rem; }
+    .geodash-tts-toggle { padding: 3px 6px; font-size: 0.68rem; }
+    .geodash-refresh-btn { padding: 3px 7px; font-size: 0.72rem; }
+    .geodash-header h1 { font-size: 0.82rem; }
+    .geodash-nav-separator { margin: 0 2px; font-size: 0.8rem; }
+    .geodash-clock-time { font-size: 0.9rem; }
+    .geodash-clock-label { font-size: 0.65rem; }
+    .geodash-clock-separator { margin: 0 4px; font-size: 0.9rem; }
+    .geodash-shabbat-time { font-size: 0.85rem; }
+    .geodash-shabbat-label { font-size: 0.65rem; }
 }
 
 /* ── Footer ──────────────────────────────────────────── */
