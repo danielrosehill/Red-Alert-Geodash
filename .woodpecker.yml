@@ -1,0 +1,29 @@
+when:
+  - event: push
+    branch: main
+
+labels:
+  type: local
+
+steps:
+  - name: deploy
+    commands:
+      - echo "Deploying Geodash from ${CI_COMMIT_SHA:0:7}..."
+      - export DEPLOY_DIR="/home/daniel/repos/github/RE_Geodash_Private"
+      # Copy frontend
+      - cp www/static/components.js www/static/dashboard.js www/static/history.js www/static/tv.js "$DEPLOY_DIR/www/static/"
+      - cp www/dashboard.html www/tablet.html www/settings.html www/alerts-news.html www/history.html www/news.html www/tv.html www/index.html "$DEPLOY_DIR/www/"
+      # Copy backend
+      - cp backend/server.py backend/pyproject.toml "$DEPLOY_DIR/backend/"
+      # Copy infra
+      - cp docker-compose.yml Dockerfile "$DEPLOY_DIR/"
+      # Copy research data
+      - cp research/area_to_polygon.json research/area_translations.json research/area_regions.json "$DEPLOY_DIR/research/"
+      # Rebuild and restart
+      - cd "$DEPLOY_DIR"
+      - docker compose build geodash
+      - docker compose up -d geodash
+      # Verify
+      - sleep 5
+      - docker ps --filter name=geodash-app --format '{{.Status}}'
+      - echo "Deploy complete!"
