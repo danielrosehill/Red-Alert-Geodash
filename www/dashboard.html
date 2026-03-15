@@ -465,6 +465,36 @@
         /* motto handled by geodash-footer component */
 
         /* Alert history feed */
+        /* Alert scope toggle */
+        .alert-scope-toggle {
+            display: flex;
+            padding: 6px 16px;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .alert-scope-toggle .scope-btn {
+            flex: 1;
+            background: #0f3460;
+            color: #aab;
+            border: 1px solid #1a3a6e;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .alert-scope-toggle .scope-btn:hover { color: #eee; }
+
+        .alert-scope-toggle .scope-btn.active {
+            background: #7eddb8;
+            color: #1a1a2e;
+            border-color: #7eddb8;
+        }
+
         .alert-feed {
             flex: 1;
             overflow-y: auto;
@@ -523,6 +553,12 @@
         .alert-item .alert-region {
             color: #8899aa;
             font-weight: 400;
+            font-size: 0.85em;
+        }
+
+        .alert-item .alert-extra {
+            color: #7eddb8;
+            font-weight: 700;
             font-size: 0.85em;
         }
 
@@ -747,6 +783,10 @@
             <div class="alert-feed-header">
                 <h3>Recent Alerts</h3>
             </div>
+            <div class="alert-scope-toggle" id="alert-scope-toggle">
+                <button class="scope-btn active" id="scope-all-btn">All Country</button>
+                <button class="scope-btn" id="scope-local-btn">My Area</button>
+            </div>
             <div class="alert-feed" id="alert-feed">
                 <div class="no-alerts">No recent alerts</div>
             </div>
@@ -801,6 +841,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/static/components.js?v=5"></script>
     <script>renderHeader('live'); renderFooter();</script>
-    <script src="/static/dashboard.js?v=10"></script>
+    <script src="/static/dashboard.js?v=14"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 [project]
 name = "red-alert-geodash"
-version = "1.2.0"
-description = "Real-time dashboard for Israel Pikud HaOref alerts with InfluxDB time-series storage"
+version = "2.0.0"
+description = "Real-time dashboard for Israel Pikud HaOref alerts with PostgreSQL storage"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "httpx>=0.27",
-    "influxdb-client>=1.40",
+    "asyncpg>=0.29",
 ]
 
 [project.scripts]

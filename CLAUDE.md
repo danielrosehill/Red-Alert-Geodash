@@ -6,7 +6,7 @@ Real-time alert visualization dashboard for Israel's Home Front Command (Pikud H
 
 - **Backend**: Python FastAPI server (`backend/server.py`) polling HFC API every 3s
 - **Frontend**: Vanilla JS/HTML/CSS, Leaflet maps, no build step
-- **Storage**: InfluxDB for alert history
+- **Storage**: PostgreSQL 16 for persistent archive + in-memory deque for instant dashboard reads
 - **Deployment**: Docker Compose on `ubuntuvm` (Tailscale) — port 8083
 
 ## Key Files
@@ -16,7 +16,7 @@ Real-time alert visualization dashboard for Israel's Home Front Command (Pikud H
 - `www/dashboard.html` — Desktop dashboard layout
 - `www/tablet.html` — Tablet-optimized layout
 - `www/settings.html` — User settings page
-- `backend/server.py` — API server, HFC polling, InfluxDB writes
+- `backend/server.py` — API server, HFC polling, PostgreSQL writes + in-memory deque
 
 ## Deployment
 
@@ -25,7 +25,7 @@ The app runs on `ubuntuvm` via Tailscale in a Docker container. Use `/deploy` sl
 - **Private repo on VM**: `/home/daniel/repos/github/RE_Geodash_Private`
 - **This public repo and the private repo are NOT connected** — files must be copied manually via scp
 - Container: `geodash-app` (port 8083 -> 8765)
-- InfluxDB: `geodash-influxdb` (port 8086, localhost only)
+- PostgreSQL: `geodash-postgres` (port 5432, localhost only)
 
 ## Alert Categories
 

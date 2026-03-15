@@ -8,7 +8,11 @@ Steps:
    ```
    Also copy backend files if changed:
    ```
-   scp backend/server.py ubuntuvm:/home/daniel/repos/github/RE_Geodash_Private/backend/
+   scp backend/server.py backend/pyproject.toml ubuntuvm:/home/daniel/repos/github/RE_Geodash_Private/backend/
+   ```
+   Also copy docker-compose.yml if changed:
+   ```
+   scp docker-compose.yml .env.example ubuntuvm:/home/daniel/repos/github/RE_Geodash_Private/
    ```
 2. Rebuild and restart the Docker container:
    ```
@@ -23,5 +27,5 @@ Notes:
 - The private repo is at `ubuntuvm:/home/daniel/repos/github/RE_Geodash_Private`
 - The public repo (this one) and private repo are NOT connected (no submodules)
 - Container runs on port 8083 (maps to internal 8765)
-- InfluxDB runs alongside in `geodash-influxdb` container
+- PostgreSQL runs alongside in `geodash-postgres` container
 - Only copy files that have actually changed to keep the Docker layer cache efficient

@@ -1,10 +1,11 @@
-"""Red Alert Geodash — Local Docker deployment with InfluxDB time-series storage.
+"""Red Alert Geodash — Local Docker deployment with PostgreSQL storage.
 
-Background poller fetches Oref alerts every 3s and writes to InfluxDB.
-Frontend reads from in-memory cache (live) and InfluxDB (history/timeline).
+Background poller fetches Oref alerts every 3s and writes to PostgreSQL.
+Frontend reads from in-memory deque (live) and PostgreSQL (history/analytics).
 """
 
 import asyncio
+import collections
 import hashlib
 import json
 import logging
@@ -16,14 +17,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import asyncpg
 import httpx
 from fastapi import FastAPI, Query, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
 
 # ── Logging ─────────────────────────────────────────────────────────────────
 
@@ -36,10 +36,7 @@ log = logging.getLogger("geodash")
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-INFLUX_URL = os.environ.get("INFLUX_URL", "http://influxdb:8086")
-INFLUX_TOKEN = os.environ.get("INFLUX_TOKEN", "")
-INFLUX_ORG = os.environ.get("INFLUX_ORG", "geodash")
-INFLUX_BUCKET = os.environ.get("INFLUX_BUCKET", "redalerts")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://geodash:geodash@postgres:5432/geodash")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "15"))
 
 OREF_HEADERS = {
@@ -72,17 +69,16 @@ cache = {
 HISTORY_CACHE_TTL = 15  # seconds
 NEWS_CACHE_TTL = 180    # 3 minutes
 
-# InfluxDB client (initialized at startup)
-influx_client: InfluxDBClient | None = None
-influx_write = None
-influx_query = None
+# PostgreSQL pool + in-memory deque (initialized at startup)
+pg_pool: asyncpg.Pool | None = None
+alert_log_deque: collections.deque = collections.deque(maxlen=10000)
 
 # HTTP client (reused for connection pooling — gentle on Oref)
 http_client: httpx.AsyncClient | None = None
 
 # Track previous alert set to detect transitions and avoid redundant writes
 prev_alert_areas: set[str] = set()
-prev_alert_hash: str = ""  # hash of alert set — only write to InfluxDB on change
+prev_alert_hash: str = ""  # hash of alert set — only write to Postgres on change
 
 # Active test alerts — {area: {alert_dict, expires: epoch}}
 test_alerts: dict[str, dict] = {}
@@ -145,39 +141,83 @@ def _human_duration(seconds: float) -> str:
     return f"{hours}h {mins}m"
 
 
-# ── InfluxDB Setup ───────────────────────────────────────────────────────────
+# ── PostgreSQL Setup ────────────────────────────────────────────────────────
 
-async def init_influx_with_retry(max_retries: int = 10, delay: float = 3.0):
-    """Initialize InfluxDB client with retry logic for container startup ordering."""
-    global influx_client, influx_write, influx_query
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS alerts (
+    id          BIGSERIAL PRIMARY KEY,
+    ts          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    area        TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    category    SMALLINT NOT NULL DEFAULT 0,
+    alert_date  TEXT NOT NULL DEFAULT '',
+    source      TEXT DEFAULT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts (ts DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_area_ts ON alerts (area, ts DESC);
+
+CREATE TABLE IF NOT EXISTS snapshots (
+    id      BIGSERIAL PRIMARY KEY,
+    ts      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    count   INTEGER NOT NULL,
+    payload JSONB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON snapshots (ts DESC);
+"""
+
+
+async def init_pg_with_retry(max_retries: int = 10, delay: float = 3.0):
+    """Initialize PostgreSQL pool, create tables, and hydrate deque."""
+    global pg_pool
 
     for attempt in range(1, max_retries + 1):
         try:
-            client = InfluxDBClient(
-                url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG,
-            )
-            # Verify connection by pinging
-            health = client.health()
-            if health.status == "pass":
-                influx_client = client
-                influx_write = client.write_api(write_options=SYNCHRONOUS)
-                influx_query = client.query_api()
-                log.info("InfluxDB connected (attempt %d)", attempt)
-                return
-            else:
-                log.warning("InfluxDB health check failed: %s", health.message)
+            pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+            # Run schema creation
+            async with pool.acquire() as conn:
+                await conn.execute(SCHEMA_SQL)
+            pg_pool = pool
+            log.info("PostgreSQL connected (attempt %d)", attempt)
+
+            # Hydrate deque from last 3 days of alerts
+            await _hydrate_deque()
+            return
         except Exception as e:
-            log.warning("InfluxDB connection attempt %d/%d failed: %s", attempt, max_retries, e)
+            log.warning("PostgreSQL connection attempt %d/%d failed: %s", attempt, max_retries, e)
 
         if attempt < max_retries:
             await asyncio.sleep(delay)
 
-    log.error("Could not connect to InfluxDB after %d attempts — running without persistence", max_retries)
+    log.error("Could not connect to PostgreSQL after %d attempts — running without persistence", max_retries)
 
 
-def store_alerts_influx(alerts: list) -> None:
-    """Write alert data to InfluxDB. Skips test alerts."""
-    if not influx_write:
+async def _hydrate_deque():
+    """Load recent alerts from Postgres into the in-memory deque."""
+    if not pg_pool:
+        return
+    try:
+        async with pg_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT ts, area, title, category, alert_date FROM alerts "
+                "WHERE ts > now() - INTERVAL '3 days' ORDER BY ts DESC LIMIT 10000"
+            )
+        # Deque is newest-first; rows are already DESC
+        for row in rows:
+            alert_log_deque.append({
+                "ts": row["ts"].isoformat(),
+                "area": row["area"],
+                "title": row["title"],
+                "category": row["category"],
+                "alert_date": row["alert_date"],
+            })
+        log.info("Hydrated deque with %d alerts from PostgreSQL", len(alert_log_deque))
+    except Exception as e:
+        log.error("Deque hydration error: %s", e)
+
+
+async def store_alerts_pg(alerts: list) -> None:
+    """Write alert data to PostgreSQL and the in-memory deque. Skips test alerts."""
+    if not pg_pool:
         return
 
     # Filter out test alerts — they should never be persisted
@@ -188,37 +228,44 @@ def store_alerts_influx(alerts: list) -> None:
     now = datetime.now(timezone.utc)
 
     try:
-        points = []
-
-        # Individual alert events — one point per area
-        for alert in alerts:
-            area = alert.get("data", "")
-            category = alert.get("category", 0)
-            title = alert.get("title", "")
-            alert_date = alert.get("alertDate", "")
-
-            p = (
-                Point("alert")
-                .tag("area", area)
-                .tag("title", title)
-                .field("category", category)
-                .field("alert_date", alert_date)
-                .time(now, WritePrecision.S)
+        async with pg_pool.acquire() as conn:
+            # Insert individual alert events
+            await conn.executemany(
+                "INSERT INTO alerts (ts, area, title, category, alert_date) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                [
+                    (
+                        now,
+                        a.get("data", ""),
+                        a.get("title", ""),
+                        int(a.get("category", 0)),
+                        a.get("alertDate", ""),
+                    )
+                    for a in alerts
+                ],
             )
-            points.append(p)
 
-        # Snapshot — full payload for timeline replay
-        snap = (
-            Point("snapshot")
-            .field("count", len(alerts))
-            .field("payload", json.dumps(alerts, ensure_ascii=False))
-            .time(now, WritePrecision.S)
-        )
-        points.append(snap)
+            # Insert snapshot
+            await conn.execute(
+                "INSERT INTO snapshots (ts, count, payload) VALUES ($1, $2, $3)",
+                now,
+                len(alerts),
+                json.dumps(alerts, ensure_ascii=False),
+            )
 
-        influx_write.write(bucket=INFLUX_BUCKET, record=points)
+        # Push to deque (newest first)
+        for a in alerts:
+            entry = {
+                "ts": now.isoformat(),
+                "area": a.get("data", ""),
+                "title": a.get("title", ""),
+                "category": int(a.get("category", 0)),
+                "alert_date": a.get("alertDate", ""),
+            }
+            alert_log_deque.appendleft(entry)
+
     except Exception as e:
-        log.error("InfluxDB write error: %s", e)
+        log.error("PostgreSQL write error: %s", e)
 
 
 # ── Oref Fetching ────────────────────────────────────────────────────────────
@@ -286,9 +333,21 @@ async def fetch_oref(url: str) -> list:
 # ── Background Poller ────────────────────────────────────────────────────────
 
 async def backfill_history():
-    """Backfill InfluxDB with today's full alert history from Oref on startup."""
-    if not influx_write or not http_client:
+    """Backfill PostgreSQL with today's full alert history from Oref on startup."""
+    if not pg_pool or not http_client:
         return
+
+    # Skip if we already have recent backfill data (any alert with source='backfill' today)
+    try:
+        async with pg_pool.acquire() as conn:
+            recent = await conn.fetchval(
+                "SELECT COUNT(*) FROM alerts WHERE source = 'backfill' AND ts > now() - INTERVAL '12 hours'"
+            )
+            if recent and recent > 0:
+                log.info("Skipping backfill — %d backfill entries from last 12h", recent)
+                return
+    except Exception:
+        pass
 
     log.info("Fetching Oref alert history for backfill...")
     try:
@@ -313,11 +372,11 @@ async def backfill_history():
             log.info("No history data available")
             return
 
-        points = []
+        rows = []
         for alert in history:
             alert_date = alert.get("alertDate", "")
             area = alert.get("data", "")
-            category = alert.get("category", 0)
+            category = int(alert.get("category", 0))
             title = alert.get("title", "") or alert.get("category_desc", "")
 
             # Parse Oref date formats:
@@ -325,6 +384,7 @@ async def backfill_history():
             #   "2026-03-10T20:08:00"     (alt history)
             try:
                 from zoneinfo import ZoneInfo
+                ts = None
                 for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M"):
                     try:
                         ts = datetime.strptime(alert_date, fmt)
@@ -332,28 +392,25 @@ async def backfill_history():
                         break
                     except ValueError:
                         continue
-                else:
+                if ts is None:
                     continue
             except ImportError:
                 continue
 
-            p = (
-                Point("alert")
-                .tag("area", area)
-                .tag("title", title)
-                .field("category", category)
-                .field("alert_date", alert_date)
-                .field("source", "backfill")
-                .time(ts, WritePrecision.S)
-            )
-            points.append(p)
+            rows.append((ts, area, title, category, alert_date, "backfill"))
 
-        if points:
-            # Write in batches to avoid overwhelming InfluxDB
-            batch_size = 500
-            for i in range(0, len(points), batch_size):
-                influx_write.write(bucket=INFLUX_BUCKET, record=points[i:i + batch_size])
-            log.info("Wrote %d historical alerts to InfluxDB", len(points))
+        if rows:
+            async with pg_pool.acquire() as conn:
+                # Batch insert
+                await conn.executemany(
+                    "INSERT INTO alerts (ts, area, title, category, alert_date, source) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    rows,
+                )
+            log.info("Wrote %d historical alerts to PostgreSQL", len(rows))
+
+            # Re-hydrate deque after backfill
+            await _hydrate_deque()
         else:
             log.info("No parseable history entries")
 
@@ -414,7 +471,7 @@ async def capture_daily_sample():
 
 
 async def poll_loop():
-    """Continuously poll Oref alerts and write to InfluxDB.
+    """Continuously poll Oref alerts and write to PostgreSQL.
 
     Runs every POLL_INTERVAL seconds. Uses a single reusable HTTP client
     with standard browser headers — looks like normal traffic.
@@ -496,8 +553,8 @@ async def poll_loop():
                 last_alert_time = time.time()
                 last_alert_areas = [a.get("data", "") for a in active_alerts]
 
-            # Only write to InfluxDB when the alert set CHANGES (not every poll cycle).
-            # This dramatically reduces InfluxDB write volume during sustained alerts.
+            # Only write to PostgreSQL when the alert set CHANGES (not every poll cycle).
+            # This dramatically reduces write volume during sustained alerts.
             real_alerts = [a for a in alerts if a.get("alert_type") != "test"]
             alert_hash = hashlib.md5(
                 json.dumps(sorted(
@@ -507,7 +564,7 @@ async def poll_loop():
 
             if alert_hash != prev_alert_hash:
                 if real_alerts or prev_alert_areas:
-                    store_alerts_influx(alerts)
+                    await store_alerts_pg(alerts)
                 prev_alert_hash = alert_hash
 
             prev_alert_areas = current_areas
@@ -528,7 +585,7 @@ async def lifespan(app: FastAPI):
 
     # Startup
     http_client = httpx.AsyncClient(timeout=10, http2=False)
-    await init_influx_with_retry()
+    await init_pg_with_retry()
 
     # Load polygon data for area counting
     polygon_path = Path(__file__).parent.parent / "research" / "area_to_polygon.json"
@@ -556,8 +613,8 @@ async def lifespan(app: FastAPI):
     poller_task.cancel()
     if http_client:
         await http_client.aclose()
-    if influx_client:
-        influx_client.close()
+    if pg_pool:
+        await pg_pool.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -613,75 +670,51 @@ async def get_area_regions():
     return FileResponse(region_path, media_type="application/json")
 
 
-# ── InfluxDB Query Endpoints ────────────────────────────────────────────────
-
-def _sanitize_flux_string(value: str) -> str:
-    """Sanitize a string for safe interpolation into Flux queries.
-
-    Prevents Flux injection by stripping characters that could break out
-    of a quoted string context.
-    """
-    if not value:
-        return ""
-    # Remove any characters that could escape Flux string context
-    return re.sub(r'["\\\n\r|>)\]}]', '', value)
+# ── PostgreSQL Query Endpoints ─────────────────────────────────────────────
 
 @app.get("/api/alert-log")
 async def get_alert_log(
     minutes: int = Query(default=60, ge=1, le=10080),
     area: str = Query(default=None),
 ):
-    """Query stored alert events from InfluxDB, deduplicated."""
-    if not influx_query:
-        return []
+    """Query stored alert events from in-memory deque, deduplicated."""
+    now = datetime.now(timezone.utc)
+    cutoff_epoch = now.timestamp() - (minutes * 60)
 
-    try:
-        area_filter = f' |> filter(fn: (r) => r["area"] == "{_sanitize_flux_string(area)}")' if area else ""
-        # Use group() to merge all series into one table, then apply a true global limit
-        query = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -{minutes}m)
-                |> filter(fn: (r) => r["_measurement"] == "alert")
-                |> filter(fn: (r) => r["_field"] == "category")
-                {area_filter}
-                |> group()
-                |> sort(columns: ["_time"], desc: true)
-                |> limit(n: 5000)
-        '''
-        tables = influx_query.query(query)
-        raw = []
-        for table in tables:
-            for record in table.records:
-                raw.append({
-                    "ts": record.get_time().isoformat(),
-                    "area": record.values.get("area", ""),
-                    "category": record.get_value(),
-                    "title": record.values.get("title", ""),
-                })
+    results_raw = []
+    for entry in alert_log_deque:
+        try:
+            entry_ts = datetime.fromisoformat(entry["ts"])
+            if entry_ts.timestamp() < cutoff_epoch:
+                continue
+        except Exception:
+            continue
 
-        # Deduplicate: collapse consecutive same area+category within 3-min windows
-        # raw is sorted desc by time; process in order and skip near-duplicates
-        results = []
-        last_seen: dict[str, str] = {}  # "area|category" -> last ts ISO
-        for entry in raw:
-            key = f"{entry['area']}|{entry['category']}"
-            if key in last_seen:
-                try:
-                    prev_ts = datetime.fromisoformat(last_seen[key])
-                    curr_ts = datetime.fromisoformat(entry["ts"])
-                    gap = abs((prev_ts - curr_ts).total_seconds())
-                    if gap < 180:  # 3 min window (polls every 15s)
-                        last_seen[key] = entry["ts"]
-                        continue
-                except Exception:
-                    pass
-            last_seen[key] = entry["ts"]
-            results.append(entry)
+        if area and entry.get("area") != area:
+            continue
 
-        return results
-    except Exception as e:
-        log.error("Alert log query error: %s", e)
-        return []
+        results_raw.append(entry)
+
+    # Deduplicate: collapse consecutive same area+category within 3-min windows
+    # results_raw is newest-first from deque; process in order and skip near-duplicates
+    results = []
+    last_seen: dict[str, str] = {}  # "area|category" -> last ts ISO
+    for entry in results_raw:
+        key = f"{entry['area']}|{entry['category']}"
+        if key in last_seen:
+            try:
+                prev_ts = datetime.fromisoformat(last_seen[key])
+                curr_ts = datetime.fromisoformat(entry["ts"])
+                gap = abs((prev_ts - curr_ts).total_seconds())
+                if gap < 180:  # 3 min window
+                    last_seen[key] = entry["ts"]
+                    continue
+            except Exception:
+                pass
+        last_seen[key] = entry["ts"]
+        results.append(entry)
+
+    return results
 
 
 @app.get("/api/alert-snapshots")
@@ -689,30 +722,28 @@ async def get_alert_snapshots(
     minutes: int = Query(default=30, ge=1, le=10080),
 ):
     """Query stored snapshots for timeline playback."""
-    if not influx_query:
+    if not pg_pool:
         return []
 
     try:
-        query = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -{minutes}m)
-                |> filter(fn: (r) => r["_measurement"] == "snapshot")
-                |> filter(fn: (r) => r["_field"] == "payload")
-                |> sort(columns: ["_time"], desc: false)
-        '''
-        tables = influx_query.query(query)
+        async with pg_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT ts, count, payload FROM snapshots "
+                "WHERE ts > now() - make_interval(mins => $1) "
+                "ORDER BY ts ASC",
+                minutes,
+            )
         results = []
-        for table in tables:
-            for record in table.records:
-                payload = record.get_value()
-                alerts = json.loads(payload) if payload else []
-                if len(alerts) > 0:
-                    results.append({
-                        "ts": record.get_time().isoformat(),
-                        "tsEpoch": record.get_time().timestamp(),
-                        "count": len(alerts),
-                        "alerts": alerts,
-                    })
+        for row in rows:
+            payload = row["payload"]
+            alerts = payload if isinstance(payload, list) else json.loads(payload) if payload else []
+            if len(alerts) > 0:
+                results.append({
+                    "ts": row["ts"].isoformat(),
+                    "tsEpoch": row["ts"].timestamp(),
+                    "count": row["count"],
+                    "alerts": alerts,
+                })
         return results
     except Exception as e:
         log.error("Snapshot query error: %s", e)
@@ -722,49 +753,20 @@ async def get_alert_snapshots(
 @app.get("/api/alert-log/stats")
 async def get_alert_log_stats():
     """Quick stats on stored alert data."""
-    if not influx_query:
-        return {"error": "InfluxDB not connected"}
+    if not pg_pool:
+        return {"error": "PostgreSQL not connected"}
 
     try:
-        # Count events
-        q_events = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -30d)
-                |> filter(fn: (r) => r["_measurement"] == "alert")
-                |> filter(fn: (r) => r["_field"] == "category")
-                |> count()
-                |> sum()
-        '''
-        q_snapshots = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -30d)
-                |> filter(fn: (r) => r["_measurement"] == "snapshot")
-                |> filter(fn: (r) => r["_field"] == "count")
-                |> count()
-        '''
-        q_areas = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -30d)
-                |> filter(fn: (r) => r["_measurement"] == "alert")
-                |> filter(fn: (r) => r["_field"] == "category")
-                |> distinct(column: "area")
-                |> count()
-        '''
-
-        event_count = 0
-        for table in influx_query.query(q_events):
-            for record in table.records:
-                event_count += record.get_value() or 0
-
-        snapshot_count = 0
-        for table in influx_query.query(q_snapshots):
-            for record in table.records:
-                snapshot_count += record.get_value() or 0
-
-        unique_areas = 0
-        for table in influx_query.query(q_areas):
-            for record in table.records:
-                unique_areas += record.get_value() or 0
+        async with pg_pool.acquire() as conn:
+            event_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM alerts WHERE ts > now() - INTERVAL '30 days'"
+            ) or 0
+            snapshot_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM snapshots WHERE ts > now() - INTERVAL '30 days'"
+            ) or 0
+            unique_areas = await conn.fetchval(
+                "SELECT COUNT(DISTINCT area) FROM alerts WHERE ts > now() - INTERVAL '30 days'"
+            ) or 0
 
         # Enriched calculated fields
         now = time.time()
@@ -788,8 +790,7 @@ async def get_alert_log_stats():
             "events": event_count,
             "snapshots": snapshot_count,
             "unique_areas": unique_areas,
-            "influx_url": INFLUX_URL,
-            "bucket": INFLUX_BUCKET,
+            "database": "postgresql",
             "poller_interval_s": POLL_INTERVAL,
             "cache_age_s": round(now - cache["alerts"]["timestamp"], 1)
             if cache["alerts"]["timestamp"] > 0
@@ -855,7 +856,7 @@ TEST_ALERT_DURATION = 30  # seconds
 
 @app.post("/api/test-alert")
 async def send_test_alert(request: Request):
-    """Inject a test alert into the live cache. Not stored in InfluxDB.
+    """Inject a test alert into the live cache. Not stored in PostgreSQL.
 
     Body (all optional):
       area: Hebrew area name (default: first monitored area)
@@ -911,7 +912,7 @@ async def get_alert_latencies(
     minutes: int = Query(default=1440, ge=1, le=10080),
     area: str = Query(default=None),
 ):
-    """Compute warning→alert interval and alert→all-clear latency from InfluxDB.
+    """Compute warning→alert interval and alert→all-clear latency from PostgreSQL.
 
     Walks each area's event timeline and finds:
     - warningInterval: seconds between a cat-14 (pre-warning) and the next red alert (cat 1-12)
@@ -919,32 +920,33 @@ async def get_alert_latencies(
 
     Returns per-area sequences and aggregated stats.
     """
-    if not influx_query:
-        return {"error": "InfluxDB not connected"}
+    if not pg_pool:
+        return {"error": "PostgreSQL not connected"}
 
     RED_CATS = {1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12}
 
     try:
-        area_filter = f' |> filter(fn: (r) => r["area"] == "{_sanitize_flux_string(area)}")' if area else ""
-        query = f'''
-            from(bucket: "{INFLUX_BUCKET}")
-                |> range(start: -{minutes}m)
-                |> filter(fn: (r) => r["_measurement"] == "alert")
-                |> filter(fn: (r) => r["_field"] == "category")
-                {area_filter}
-                |> sort(columns: ["_time"], desc: false)
-                |> limit(n: 5000)
-        '''
-        tables = influx_query.query(query)
+        async with pg_pool.acquire() as conn:
+            if area:
+                rows = await conn.fetch(
+                    "SELECT ts, area, category FROM alerts "
+                    "WHERE ts > now() - make_interval(mins => $1) AND area = $2 "
+                    "ORDER BY area, ts ASC LIMIT 5000",
+                    minutes, area,
+                )
+            else:
+                rows = await conn.fetch(
+                    "SELECT ts, area, category FROM alerts "
+                    "WHERE ts > now() - make_interval(mins => $1) "
+                    "ORDER BY area, ts ASC LIMIT 5000",
+                    minutes,
+                )
 
         # Group events by area
         by_area: dict[str, list] = {}
-        for table in tables:
-            for record in table.records:
-                a = record.values.get("area", "")
-                cat = record.get_value()
-                ts = record.get_time()
-                by_area.setdefault(a, []).append({"ts": ts, "category": cat})
+        for row in rows:
+            a = row["area"]
+            by_area.setdefault(a, []).append({"ts": row["ts"], "category": row["category"]})
 
         warning_intervals = []  # seconds from warning to red alert
         all_clear_latencies = []  # seconds from red alert to all-clear
@@ -1187,22 +1189,24 @@ async def check_auth():
 async def health_check():
     """Health check endpoint for Docker and monitoring."""
     now = time.time()
-    influx_ok = False
-    if influx_client:
+    pg_ok = False
+    if pg_pool:
         try:
-            health = influx_client.health()
-            influx_ok = health.status == "pass"
+            async with pg_pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+            pg_ok = True
         except Exception:
             pass
 
     cache_age = round(now - cache["alerts"]["timestamp"], 1) if cache["alerts"]["timestamp"] > 0 else None
 
     return {
-        "status": "ok" if influx_ok else "degraded",
-        "influxdb": "connected" if influx_ok else "disconnected",
+        "status": "ok" if pg_ok else "degraded",
+        "postgres": "connected" if pg_ok else "disconnected",
         "poller_interval_s": POLL_INTERVAL,
         "cache_age_s": cache_age,
         "polygon_areas": len(polygonData),
+        "deque_size": len(alert_log_deque),
     }
 
 
