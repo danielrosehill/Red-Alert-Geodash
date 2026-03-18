@@ -9,6 +9,7 @@ fetch('/api/check-auth').catch(() => {});
 // ── Translations ──────────────────────────────────────────────────────────────
 
 let areaTranslations = {};
+let areaRegions = {};
 
 async function loadTranslations() {
     try {
@@ -19,14 +20,28 @@ async function loadTranslations() {
     }
 }
 
+async function loadAreaRegions() {
+    try {
+        const resp = await fetch("/api/area-regions");
+        if (resp.ok) areaRegions = await resp.json();
+    } catch (e) {
+        console.warn("Could not load area regions:", e);
+    }
+}
+
 function translateArea(hebrewName) {
     if (!hebrewName) return hebrewName;
     return areaTranslations[hebrewName] || hebrewName;
 }
 
+function getRegion(hebrewName) {
+    if (!hebrewName || !areaRegions[hebrewName]) return '';
+    return areaRegions[hebrewName].region_en || '';
+}
+
 const TITLE_TRANSLATIONS = {
-    "ירי רקטות וטילים": "Rockets & Missiles",
-    "חדירת כלי טיס עוין": "Hostile Aircraft Intrusion",
+    "ירי רקטות וטילים": "Rockets",
+    "חדירת כלי טיס עוין": "UAV",
     "חדירת כלי טיס": "Aircraft Intrusion",
     "חדירת מחבלים": "Terrorist Infiltration",
     "רעידת אדמה": "Earthquake",
@@ -36,7 +51,7 @@ const TITLE_TRANSLATIONS = {
     "התרעת קדם": "Pre-Warning",
     "ירי רקטות": "Rocket Fire",
     "טיל בליסטי": "Ballistic Missile",
-    "כלי טיס עוין": "Hostile Aircraft",
+    "כלי טיס עוין": "UAV",
     "היכנסו למרחב המוגן": "Enter Protected Space",
     "היכנס למרחב המוגן": "Enter Protected Space",
     "הגיעו למרחב המוגן": "Reach Protected Space",
@@ -46,7 +61,7 @@ const TITLE_TRANSLATIONS = {
     "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו": "May Leave Shelter - Stay Nearby",
     "מגן אך יש להישאר בקרבתו": "Shield - Stay Nearby",
     "בדקות הקרובות צפויות להתקבל התרעות באזורך": "Early Warning - Alerts Expected Shortly",
-    "האירוע הסתיים": "All Clear - Event Concluded",
+    "האירוע הסתיים": "All Clear",
 };
 
 function translateTitle(hebrewTitle) {
@@ -69,7 +84,7 @@ const TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href=
 
 const JERUSALEM_CENTER = [31.78, 35.22];
 const JERUSALEM_WIDE_CENTER = [31.75, 35.10];
-const ISRAEL_CENTER = [31.5, 35.0];
+const ISRAEL_CENTER = [31.4, 34.8];
 
 // Local area monitoring — Hebrew keys, English display names
 const AREA_OPTIONS = [
@@ -96,11 +111,47 @@ const CATEGORY_COLORS = {
 };
 
 const CATEGORY_LABELS = {
-    1: "🚀 Rockets", 2: "🛩️ Drone", 3: "☣️ Chemical", 4: "⚠️ Warning",
-    6: "🛩️ Hostile Aircraft",
-    7: "🌍 Earthquake", 8: "🌍 Earthquake", 9: "☢️ CBRNE", 10: "🔫 Infiltration",
-    11: "🌊 Tsunami", 12: "⚠️ Hazmat", 13: "✅ All Clear", 14: "⏳ Early Warning",
+    1: "Rockets", 2: "UAV", 3: "Chemical", 4: "Warning",
+    6: "UAV",
+    7: "Earthquake", 8: "Earthquake", 9: "CBRNE", 10: "Infiltration",
+    11: "Tsunami", 12: "Hazmat", 13: "All Clear", 14: "Early Warning",
 };
+
+// Shelter instruction titles — post-event messages that should show as all-clear
+const SHELTER_TITLES_HE = [
+    "האירוע הסתיים",
+    "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",
+    "סיום שהייה בסמיכות למרחב המוגן",
+    "יש לשהות בסמיכות למרחב המוגן",
+    "מגן אך יש להישאר בקרבתו",
+];
+
+function isShelterInstruction(title) {
+    if (!title) return false;
+    return SHELTER_TITLES_HE.some(t => title.includes(t) || t.includes(title));
+}
+
+// ── National Severity Levels ────────────────────────────────────────────────
+
+const SEVERITY_LEVELS = [
+    { min: 0,   max: 0,   level: 0, label: "No Active Threats",    color: "#7eddb8" },
+    { min: 1,   max: 10,  level: 1, label: "Low",                  color: "#ffeb3b" },
+    { min: 11,  max: 50,  level: 2, label: "Moderate",             color: "#ff9800" },
+    { min: 51,  max: 100, level: 3, label: "Elevated",             color: "#ff5722" },
+    { min: 101, max: 200, level: 4, label: "High",                 color: "#e94560" },
+    { min: 201, max: 300, level: 5, label: "Severe",               color: "#d32f2f" },
+    { min: 301, max: 400, level: 6, label: "Critical",             color: "#b71c1c" },
+    { min: 401, max: 500, level: 7, label: "Extreme",              color: "#880e4f" },
+    { min: 501, max: 700, level: 8, label: "Maximum",              color: "#4a0072" },
+];
+
+function getSeverity(activeCount) {
+    if (activeCount > 700) return SEVERITY_LEVELS[SEVERITY_LEVELS.length - 1];
+    for (const s of SEVERITY_LEVELS) {
+        if (activeCount >= s.min && activeCount <= s.max) return s;
+    }
+    return SEVERITY_LEVELS[0];
+}
 
 // Polygons are invisible by default — no outlines shown
 const DEFAULT_STYLE = {
@@ -348,17 +399,33 @@ document.addEventListener('keydown', (e) => {
 
 // ── Maps (3 maps: country, jerusalem wide, jerusalem city) ────────────────────
 
-const mapJerusalem = L.map("map-jerusalem", {
+const lockedMapOptions = {
     zoomControl: false, attributionControl: false,
-}).setView(JERUSALEM_CENTER, 13);
+    dragging: false, scrollWheelZoom: false,
+    touchZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false,
+};
 
-const mapJerusalemWide = L.map("map-jerusalem-wide", {
-    zoomControl: false, attributionControl: false,
-}).setView(JERUSALEM_WIDE_CENTER, 10);
+const mapJerusalem = L.map("map-jerusalem", lockedMapOptions).setView(JERUSALEM_CENTER, 13);
 
-const mapCountry = L.map("map-country", {
-    zoomControl: false, attributionControl: false,
-}).setView(ISRAEL_CENTER, 8);
+const mapJerusalemWide = L.map("map-jerusalem-wide", lockedMapOptions).setView(JERUSALEM_WIDE_CENTER, 11);
+
+const mapCountry = L.map("map-country", lockedMapOptions).setView(ISRAEL_CENTER, 8.5);
+
+// Track user interaction to pause auto-zoom
+let userInteractedWithMap = false;
+let userInteractionTimer = null;
+mapCountry.on('dragstart zoomstart', (e) => {
+    // Ignore programmatic zoom/pan (from autoZoomToAlerts)
+    if (e.originalEvent || e.type === 'dragstart') {
+        userInteractedWithMap = true;
+        if (userInteractionTimer) clearTimeout(userInteractionTimer);
+        // Resume auto-zoom after 2 minutes of no interaction
+        userInteractionTimer = setTimeout(() => {
+            userInteractedWithMap = false;
+        }, 120000);
+    }
+});
 
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalem);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalemWide);
@@ -369,7 +436,7 @@ legend.onAdd = function () {
     const div = L.DomUtil.create("div", "legend");
     div.innerHTML = `
         <div class="legend-item"><div class="legend-swatch" style="background:#e94560"></div> Active Alert</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#ff9800"></div> Pre-Warning</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ff9800"></div> Warning</div>
         <div class="legend-item"><div class="legend-swatch" style="background:#4ecca3"></div> All Clear</div>
     `;
     return div;
@@ -402,9 +469,10 @@ async function loadPolygons() {
         const jerusalemWidePoly = L.polygon(coords, { ...DEFAULT_STYLE }).addTo(mapJerusalemWide);
         const jerusalemPoly = L.polygon(coords, { ...DEFAULT_STYLE }).addTo(mapJerusalem);
 
-        countryPoly.bindTooltip(name, { sticky: true, direction: "top" });
-        jerusalemWidePoly.bindTooltip(name, { sticky: true, direction: "top" });
-        jerusalemPoly.bindTooltip(name, { sticky: true, direction: "top" });
+        const displayName = translateArea(name) || name;
+        countryPoly.bindTooltip(displayName, { sticky: true, direction: "top" });
+        jerusalemWidePoly.bindTooltip(displayName, { sticky: true, direction: "top" });
+        jerusalemPoly.bindTooltip(displayName, { sticky: true, direction: "top" });
 
         areaLayers[name] = {
             country: countryPoly,
@@ -415,6 +483,49 @@ async function loadPolygons() {
         const center = getPolygonCenter(coords);
         if (center) areaCenters[name] = center;
     }
+}
+
+// ── Tooltip Helpers ─────────────────────────────────────────────────────────────
+
+function formatAlertAge(epochSec) {
+    const diffMs = Date.now() - epochSec * 1000;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin === 1) return '1 min ago';
+    if (diffMin < 60) return `${diffMin} mins ago`;
+    if (diffHr === 1) return '1 hour ago';
+    return `${diffHr} hours ago`;
+}
+
+function updateAreaTooltip(name, alertInfo) {
+    const layers = areaLayers[name];
+    if (!layers) return;
+
+    const englishName = translateArea(name);
+    let content = englishName;
+
+    if (alertInfo) {
+        const label = translateTitle(alertInfo.title) || CATEGORY_LABELS[alertInfo.category] || 'Alert';
+        const presumedStr = alertInfo.presumed ? ' (presumed)' : '';
+        const ageStr = alertInfo.alertStartTime ? formatAlertAge(alertInfo.alertStartTime) : '';
+
+        content = `<b>${englishName}</b><br>${label}${presumedStr}`;
+        if (ageStr) content += `<br>${ageStr}`;
+    }
+
+    layers.country.setTooltipContent(content);
+    layers.jerusalemWide.setTooltipContent(content);
+    layers.jerusalem.setTooltipContent(content);
+}
+
+function resetAreaTooltip(name) {
+    const layers = areaLayers[name];
+    if (!layers) return;
+    const content = translateArea(name);
+    layers.country.setTooltipContent(content);
+    layers.jerusalemWide.setTooltipContent(content);
+    layers.jerusalem.setTooltipContent(content);
 }
 
 // ── Alert Processing ───────────────────────────────────────────────────────────
@@ -479,9 +590,32 @@ function addToHistory(area, category, title, alert_type) {
         time: timeStr,
         area: area,
         category: category,
-        label: (alert_type === 'test' ? 'TEST ' : '') + (CATEGORY_LABELS[category] || `Cat ${category}`),
+        label: (alert_type === 'test' ? 'TEST ' : '') + (translateTitle(title) || CATEGORY_LABELS[category] || `Cat ${category}`),
         title: title,
         alert_type: alert_type,
+    });
+
+    if (alertHistory.length > MAX_HISTORY) {
+        alertHistory.length = MAX_HISTORY;
+    }
+}
+
+function addGroupedToHistory(areas, category, label) {
+    if (areas.length === 0) return;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Jerusalem', hour12: false,
+        hour: '2-digit', minute: '2-digit',
+    });
+
+    alertHistory.unshift({
+        time: timeStr,
+        area: areas[0],
+        areas: areas,
+        category: category,
+        label: label,
+        title: '',
+        grouped: true,
     });
 
     if (alertHistory.length > MAX_HISTORY) {
@@ -499,11 +633,26 @@ function renderAlertFeed() {
     }
 
     feed.innerHTML = alertHistory.map(entry => {
-        const catClass = entry.category === 13 ? 'cat-13' : entry.category === 14 ? 'cat-14' : '';
+        const effectiveCat = (entry.category !== 13 && isShelterInstruction(entry.title)) ? 13 : entry.category;
+        const catClass = effectiveCat === 13 ? 'cat-13' : effectiveCat === 14 ? 'cat-14' : '';
+
+        // Grouped entry (e.g. "All Clear — Bnei Brak (+19 areas)")
+        if (entry.grouped && entry.areas && entry.areas.length > 1) {
+            const firstName = translateArea(entry.areas[0]);
+            const extra = entry.areas.length - 1;
+            const tooltip = entry.areas.map(a => escapeAttr(translateArea(a))).join('&#10;');
+            return `<div class="alert-item" title="${tooltip}">
+                <span class="alert-time">${entry.time}</span>
+                <span class="alert-type ${catClass}">${escapeHtml(entry.label)}</span>
+                <div class="alert-area">${escapeHtml(firstName)} <span class="alert-region">(+${extra} areas)</span></div>
+            </div>`;
+        }
+
+        const regionHtml = getRegion(entry.area) ? ` <span class="alert-region">(${escapeHtml(getRegion(entry.area))})</span>` : '';
         return `<div class="alert-item">
             <span class="alert-time">${entry.time}</span>
             <span class="alert-type ${catClass}">${escapeHtml(entry.label)}</span>
-            <div class="alert-area">${escapeHtml(translateArea(entry.area))}</div>
+            <div class="alert-area">${escapeHtml(translateArea(entry.area))}${regionHtml}</div>
         </div>`;
     }).join('');
 }
@@ -512,8 +661,19 @@ function processAlerts(alerts) {
     const newAlerts = new Map();
 
     for (const alert of alerts) {
-        const { data: area, category, title, alertDate, alert_type } = alert;
-        newAlerts.set(area, { category, title, alertDate, alert_type });
+        let { data: area, category, title, alertDate, alert_type, alertStartTime, presumed } = alert;
+        // Shelter instructions (e.g. "leave shelter, stay nearby") may arrive
+        // with wrong category (e.g. 10). Remap to 13 (all-clear).
+        if (category !== 13 && isShelterInstruction(title)) {
+            category = 13;
+        }
+        // Don't let all-clear (cat 13) overwrite a pre-warning (cat 14).
+        // All-clear is for the previous event; pre-warning is about incoming alerts.
+        const existing = newAlerts.get(area);
+        if (existing && existing.category === 14 && category === 13) {
+            continue;
+        }
+        newAlerts.set(area, { category, title, alertDate, alert_type, alertStartTime, presumed });
     }
 
     // Check if local area alert has cleared — announce all-clear via TTS
@@ -529,6 +689,7 @@ function processAlerts(alerts) {
         if (!newAlerts.has(area)) {
             stopFlash(area);
             setAreaStyle(area, "#4ecca3", 0.4);
+            resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
                 setAreaStyle(area, "transparent", 0);
@@ -548,6 +709,7 @@ function processAlerts(alerts) {
         if (info.category === 13) {
             stopFlash(area);
             setAreaStyle(area, "#4ecca3", 0.4);
+            resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
                 setAreaStyle(area, "transparent", 0);
@@ -561,6 +723,7 @@ function processAlerts(alerts) {
             stopFlash(area);
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
             setAreaStyle(area, "#ff9800", 0.45);
+            updateAreaTooltip(area, info);
 
             if (isNew && area === LOCAL_AREA) {
                 showLocalAlert('warning', info.title);
@@ -568,7 +731,10 @@ function processAlerts(alerts) {
         } else {
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
             setAreaStyle(area, color, 0.6);
-            flashArea(area);
+            if (!info.presumed) {
+                flashArea(area);
+            }
+            updateAreaTooltip(area, info);
 
             if (isNew && area === LOCAL_AREA) {
                 showLocalAlert('red', info.title);
@@ -576,13 +742,52 @@ function processAlerts(alerts) {
         }
     }
 
+    // Track areas that just cleared (were active/warning, now gone entirely)
+    const clearedAreas = [];
+    for (const [area, info] of currentAlerts) {
+        if (!newAlerts.has(area) && info.category !== 13) {
+            clearedAreas.push(area);
+        }
+    }
+
     currentAlerts = newAlerts;
 
-    // Add new alerts to history feed
+    // Add new alerts to history feed — group by category
+    const byCategory = {};
     for (const entry of newAreas) {
-        addToHistory(entry.area, entry.category, entry.title, entry.alert_type);
+        const effectiveCat = (entry.category !== 13 && isShelterInstruction(entry.title)) ? 13 : entry.category;
+        const label = (entry.alert_type === 'test' ? 'TEST ' : '') + (translateTitle(entry.title) || CATEGORY_LABELS[effectiveCat] || `Cat ${effectiveCat}`);
+        const key = `${effectiveCat}|${label}`;
+        if (!byCategory[key]) byCategory[key] = { category: effectiveCat, label, areas: [] };
+        byCategory[key].areas.push(entry.area);
     }
-    if (newAreas.length > 0) {
+
+    let historyChanged = false;
+
+    for (const group of Object.values(byCategory)) {
+        if (group.areas.length >= 3) {
+            addGroupedToHistory(group.areas, group.category, group.label);
+        } else {
+            for (const area of group.areas) {
+                addToHistory(area, group.category, group.label, '');
+            }
+        }
+        historyChanged = true;
+    }
+
+    // Add implicit clears as grouped entry
+    if (clearedAreas.length > 0) {
+        if (clearedAreas.length >= 3) {
+            addGroupedToHistory(clearedAreas, 13, 'All Clear');
+        } else {
+            for (const area of clearedAreas) {
+                addToHistory(area, 13, 'האירוע הסתיים', '');
+            }
+        }
+        historyChanged = true;
+    }
+
+    if (historyChanged) {
         renderAlertFeed();
     }
 
@@ -609,7 +814,7 @@ function processAlerts(alerts) {
     if (newAlerts.has(LOCAL_AREA)) {
         const localInfo = newAlerts.get(LOCAL_AREA);
         if (localInfo.category !== 13) {
-            monStatus.textContent = CATEGORY_LABELS[localInfo.category] || localInfo.title;
+            monStatus.textContent = translateTitle(localInfo.title) || CATEGORY_LABELS[localInfo.category] || localInfo.title;
             monStatus.style.color = CATEGORY_COLORS[localInfo.category] || '#e94560';
         } else {
             monStatus.textContent = 'All clear';
@@ -643,9 +848,12 @@ function processAlerts(alerts) {
 
 let mapIsAutoZoomed = false;
 const MAP_DEFAULT_CENTER = ISRAEL_CENTER;
-const MAP_DEFAULT_ZOOM = 8;
+const MAP_DEFAULT_ZOOM = 8.5;
 
 function autoZoomToAlerts(alerts) {
+    // Skip auto-zoom when user is manually navigating the map
+    if (userInteractedWithMap) return;
+
     const activeAreas = [];
     for (const [area, info] of alerts) {
         if (info.category !== 13 && info.category !== 14 && info.category < 15) {
@@ -693,6 +901,9 @@ function updateFlashBar(alerts) {
         }
     }
 
+    // Update severity indicator
+    const severityEl = document.getElementById('severity-indicator');
+
     if (redAlerts.length > 0) {
         bar.classList.add('alert-active');
         // Group by type for "by type" display
@@ -723,6 +934,14 @@ function updateFlashBar(alerts) {
     } else {
         label.textContent = 'LIVE';
         text.textContent = 'No active alerts';
+    }
+
+    // Update national severity level
+    if (severityEl) {
+        const severity = getSeverity(redAlerts.length);
+        severityEl.textContent = `Severity: ${severity.label} (${redAlerts.length})`;
+        severityEl.style.color = severity.color;
+        severityEl.style.borderColor = severity.color;
     }
 }
 
@@ -798,7 +1017,7 @@ function buildAreaSelector() {
 }
 
 async function init() {
-    await loadTranslations();
+    await Promise.all([loadTranslations(), loadAreaRegions()]);
     buildAreaSelector();
 
     // Set initial monitoring area name and status
@@ -826,7 +1045,7 @@ async function init() {
     window.addEventListener('resize', resizeMaps);
     setInterval(pollAlerts, POLL_INTERVAL);
 
-    // Load recent history from API — deduplicate consecutive same-area alerts
+    // Load recent history from API — deduplicate and group by time+category
     try {
         const resp = await fetch("/api/alert-log?minutes=4320");
         if (resp.ok) {
@@ -835,10 +1054,10 @@ async function init() {
             const sorted = history.slice(0, 500).reverse();
             // Track last seen category per area to collapse repeated polls
             const lastSeen = new Map();
+            const deduped = [];
             for (const entry of sorted) {
                 const key = `${entry.area}|${entry.category}`;
                 if (lastSeen.has(key)) {
-                    // Same area+category still active — skip duplicate
                     const prev = lastSeen.get(key);
                     const gap = new Date(entry.ts) - new Date(prev.ts);
                     if (gap < 120000) { // within 2 min = same event
@@ -847,19 +1066,49 @@ async function init() {
                     }
                 }
                 lastSeen.set(key, entry);
+                deduped.push(entry);
+            }
 
+            // Group entries by minute + category for compact display
+            const groups = [];
+            for (const entry of deduped) {
                 const ts = new Date(entry.ts);
                 const timeStr = ts.toLocaleTimeString('en-GB', {
                     timeZone: 'Asia/Jerusalem', hour12: false,
                     hour: '2-digit', minute: '2-digit',
                 });
-                alertHistory.push({
-                    time: timeStr,
-                    area: entry.area,
-                    category: entry.category,
-                    label: CATEGORY_LABELS[entry.category] || `Cat ${entry.category}`,
-                    title: entry.title,
-                });
+                const effectiveCat = (entry.category !== 13 && isShelterInstruction(entry.title)) ? 13 : entry.category;
+                const label = translateTitle(entry.title) || CATEGORY_LABELS[effectiveCat] || `Cat ${effectiveCat}`;
+                const groupKey = `${timeStr}|${effectiveCat}|${label}`;
+
+                const last = groups.length > 0 ? groups[groups.length - 1] : null;
+                if (last && last.groupKey === groupKey) {
+                    last.areas.push(entry.area);
+                } else {
+                    groups.push({
+                        groupKey,
+                        time: timeStr,
+                        category: effectiveCat,
+                        label,
+                        title: entry.title,
+                        areas: [entry.area],
+                        area: entry.area,
+                    });
+                }
+            }
+
+            for (const group of groups) {
+                if (group.areas.length >= 2) {
+                    addGroupedToHistory(group.areas, group.category, group.label);
+                } else {
+                    alertHistory.push({
+                        time: group.time,
+                        area: group.area,
+                        category: group.category,
+                        label: group.label,
+                        title: group.title,
+                    });
+                }
             }
             // Sort newest first
             alertHistory.sort((a, b) => b.time > a.time ? 1 : -1);
@@ -871,6 +1120,88 @@ async function init() {
     }
 
     document.addEventListener('click', () => { getAudioCtx(); }, { once: true });
+
+    // ── News Ticker ─────────────────────────────────────────────────────────
+    initNewsTicker();
+}
+
+// ── News Ticker ─────────────────────────────────────────────────────────────
+
+let tickerArticles = [];
+let tickerIndex = 0;
+let tickerTimer = null;
+const TICKER_INTERVAL = 15000; // 15 seconds
+const TICKER_NEWS_POLL = 600000; // 10 minutes
+
+function getTickerSourceClass(source) {
+    if (!source) return 'other';
+    const s = source.toLowerCase();
+    if (s.includes('times of israel') || s.includes('toi')) return 'toi';
+    if (s.includes('jns')) return 'jns';
+    return 'other';
+}
+
+function getTickerSourceLabel(source) {
+    if (!source) return '';
+    const s = source.toLowerCase();
+    if (s.includes('times of israel')) return 'TOI';
+    if (s.includes('jns')) return 'JNS';
+    return source;
+}
+
+async function fetchTickerNews() {
+    try {
+        const resp = await fetch('/api/news');
+        if (!resp.ok) return;
+        const articles = await resp.json();
+        if (articles && articles.length > 0) {
+            articles.sort((a, b) => {
+                const da = a.pubDate ? new Date(a.pubDate) : new Date(0);
+                const db = b.pubDate ? new Date(b.pubDate) : new Date(0);
+                return db - da;
+            });
+            tickerArticles = articles;
+        }
+    } catch (e) {
+        console.warn('Ticker news fetch error:', e);
+    }
+}
+
+function showTickerItem() {
+    if (tickerArticles.length === 0) return;
+
+    const item = document.getElementById('ticker-item');
+    if (!item) return;
+
+    // Fade out
+    item.classList.remove('visible');
+
+    setTimeout(() => {
+        const article = tickerArticles[tickerIndex % tickerArticles.length];
+        const srcClass = getTickerSourceClass(article.source);
+        const srcLabel = getTickerSourceLabel(article.source);
+        const timeAgo = relativeTime(article.pubDate);
+
+        const link = article.link ? `<a href="${escapeAttr(article.link)}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a>` : escapeHtml(article.title);
+
+        item.innerHTML = `
+            <span class="ticker-headline">${link}</span>
+            ${srcLabel ? `<span class="ticker-source ${srcClass}">${escapeHtml(srcLabel)}</span>` : ''}
+            <span class="ticker-time">${escapeHtml(timeAgo)}</span>
+        `;
+
+        // Fade in
+        item.classList.add('visible');
+        tickerIndex++;
+    }, 800); // Wait for fade-out transition
+}
+
+function initNewsTicker() {
+    fetchTickerNews().then(() => {
+        showTickerItem();
+        tickerTimer = setInterval(showTickerItem, TICKER_INTERVAL);
+    });
+    setInterval(fetchTickerNews, TICKER_NEWS_POLL);
 }
 
 init();

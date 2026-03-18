@@ -20,7 +20,7 @@ const CATEGORY_COLORS = {
 
 const CATEGORY_LABELS = {
     1: "Rockets", 2: "Drone", 3: "Chemical", 4: "Warning",
-    6: "Hostile Aircraft",
+    6: "UAV",
     7: "Earthquake", 8: "Earthquake", 9: "CBRNE", 10: "Infiltration",
     11: "Tsunami", 12: "Hazmat", 13: "All Clear", 14: "Early Warning",
 };
@@ -37,8 +37,8 @@ const DEFAULT_STYLE = {
 let areaTranslations = {};
 
 const TITLE_TRANSLATIONS = {
-    "ירי רקטות וטילים": "Rockets & Missiles",
-    "חדירת כלי טיס עוין": "Hostile Aircraft Intrusion",
+    "ירי רקטות וטילים": "Rockets",
+    "חדירת כלי טיס עוין": "UAV",
     "חדירת כלי טיס": "Aircraft Intrusion",
     "חדירת מחבלים": "Terrorist Infiltration",
     "רעידת אדמה": "Earthquake",
@@ -49,7 +49,7 @@ const TITLE_TRANSLATIONS = {
     "התרעת קדם": "Pre-Warning",
     "ירי רקטות": "Rocket Fire",
     "טיל בליסטי": "Ballistic Missile",
-    "כלי טיס עוין": "Hostile Aircraft",
+    "כלי טיס עוין": "UAV",
     "היכנסו למרחב המוגן": "Enter Protected Space",
     "...היכנסו למרחב המוגן": "Enter Protected Space",
     "היכנס למרחב המוגן": "Enter Protected Space",
@@ -62,7 +62,7 @@ const TITLE_TRANSLATIONS = {
     "יש לשהות בסמיכות למרחב המוגן": "Stay Near Protected Space",
     "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו": "May Leave Shelter - Stay Nearby",
     "בדקות הקרובות צפויות להתקבל התרעות באזורך": "Early Warning - Alerts Expected Shortly",
-    "האירוע הסתיים": "All Clear - Event Concluded",
+    "האירוע הסתיים": "All Clear",
 };
 
 async function loadTranslations() {
@@ -455,10 +455,18 @@ function setupScopeToggle() {
 async function init() {
     setTimeout(() => { mapCountry.invalidateSize(); }, 100);
 
-    await loadTranslations();
-    await loadAreaRegions();
-    buildLocalRegionAreas();
-    await loadPolygons();
+    try {
+        await loadTranslations();
+    } catch (e) { console.error('Failed to load translations:', e); }
+
+    try {
+        await loadAreaRegions();
+        buildLocalRegionAreas();
+    } catch (e) { console.error('Failed to load area regions:', e); }
+
+    try {
+        await loadPolygons();
+    } catch (e) { console.error('Failed to load polygons:', e); }
 
     setupScopeToggle();
 

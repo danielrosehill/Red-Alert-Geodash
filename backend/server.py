@@ -91,6 +91,32 @@ test_alerts: dict[str, dict] = {}
 last_alert_time: float | None = None  # epoch when last non-empty alert was seen
 last_alert_areas: list[str] = []      # areas from the last active alert
 
+# Alert persistence — presume active for 30 min without all-clear
+alert_tracking: dict[str, dict] = {}  # area -> {"start": epoch, "alert": dict}
+PRESUMED_ACTIVE_DURATION = 1800  # 30 minutes
+PREWARNING_ACTIVE_DURATION = 600  # 10 minutes — cat-14 pre-warnings resolve faster
+
+# Shelter instruction titles — these are post-event messages, NOT active threats.
+# Oref sends them in single-object format with various "cat" values (e.g. 10)
+# but they should all be treated as all-clear (category 13).
+SHELTER_INSTRUCTION_TITLES = {
+    "האירוע הסתיים",                                          # The event has ended
+    "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",           # May leave shelter, stay nearby
+    "סיום שהייה בסמיכות למרחב המוגן",                         # End shelter proximity
+    "יש לשהות בסמיכות למרחב המוגן",                           # Stay near protected space
+    "מגן אך יש להישאר בקרבתו",                                # Shield, stay nearby
+}
+
+
+def is_shelter_instruction(title: str) -> bool:
+    """Check if an alert title is a shelter instruction (post-event, not a threat)."""
+    if not title:
+        return False
+    for shelter_title in SHELTER_INSTRUCTION_TITLES:
+        if shelter_title in title or title in shelter_title:
+            return True
+    return False
+
 # Monitored areas — regions of interest for the dashboard
 MONITORED_AREAS = {
     "jerusalem": "ירושלים - דרום",
@@ -224,12 +250,20 @@ async def fetch_oref(url: str) -> list:
         # The "data" field contains area names; expand into per-area alert objects.
         if isinstance(parsed, dict):
             areas = parsed.get("data", [])
+            raw_cat = int(parsed.get("cat", 0))
+            title = parsed.get("title", "")
+
+            # Shelter instructions (e.g. "leave shelter, stay nearby") come
+            # with various cat values (often 10) but are NOT active threats.
+            # Remap to category 13 (all-clear) so they're handled correctly.
+            category = 13 if is_shelter_instruction(title) else raw_cat
+
             if isinstance(areas, list):
                 return [
                     {
                         "data": area,
-                        "category": int(parsed.get("cat", 0)),
-                        "title": parsed.get("title", ""),
+                        "category": category,
+                        "title": title,
                         "desc": parsed.get("desc", ""),
                         "alertDate": "",
                     }
@@ -238,8 +272,8 @@ async def fetch_oref(url: str) -> list:
             # data is a single string area name
             return [{
                 "data": areas if isinstance(areas, str) else str(areas),
-                "category": int(parsed.get("cat", 0)),
-                "title": parsed.get("title", ""),
+                "category": category,
+                "title": title,
                 "desc": parsed.get("desc", ""),
                 "alertDate": "",
             }]
@@ -405,6 +439,65 @@ async def poll_loop():
                 del test_alerts[k]
             for area, ta in test_alerts.items():
                 alerts.append(ta["alert"])
+
+            # -- Alert persistence: presume active for 30 min without all-clear --
+            now_ts = time.time()
+
+            # Classify current Oref alerts (exclude test alerts)
+            oref_active: dict[str, dict] = {}
+            oref_allclear: set[str] = set()
+            for a in alerts:
+                if a.get("alert_type") == "test":
+                    continue
+                area = a.get("data", "")
+                cat = a.get("category", 0)
+                title = a.get("title", "")
+                # Category 13 OR shelter instruction titles = all-clear
+                if cat == 13 or is_shelter_instruction(title):
+                    oref_allclear.add(area)
+                elif cat not in (0,) and cat < 15:
+                    oref_active[area] = a
+
+            # Track new active areas
+            for area, alert_dict in oref_active.items():
+                if area not in alert_tracking:
+                    alert_tracking[area] = {"start": now_ts, "alert": dict(alert_dict)}
+
+            # Handle areas that dropped from Oref
+            for area in list(alert_tracking.keys()):
+                if area in oref_active:
+                    continue  # still active
+                if area in oref_allclear:
+                    # Don't let all-clear cancel pre-warnings (cat 14).
+                    # All-clear is for the *previous* event; pre-warnings
+                    # are about *incoming* alerts and should expire naturally.
+                    tracked_cat = alert_tracking[area]["alert"].get("category", 0)
+                    if tracked_cat == 14:
+                        pa = dict(alert_tracking[area]["alert"])
+                        pa["presumed"] = True
+                        pa["alertStartTime"] = alert_tracking[area]["start"]
+                        if not any(a.get("data") == area and a.get("category") == 14 for a in alerts):
+                            alerts.append(pa)
+                        continue
+                    del alert_tracking[area]  # all-clear received
+                elif now_ts - alert_tracking[area]["start"] > (
+                    PREWARNING_ACTIVE_DURATION if alert_tracking[area]["alert"].get("category", 0) == 14
+                    else PRESUMED_ACTIVE_DURATION
+                ):
+                    del alert_tracking[area]  # expired after 30 min
+                else:
+                    # Presumed still active — inject into alerts
+                    pa = dict(alert_tracking[area]["alert"])
+                    pa["presumed"] = True
+                    pa["alertStartTime"] = alert_tracking[area]["start"]
+                    if not any(a.get("data") == area for a in alerts):
+                        alerts.append(pa)
+
+            # Add start times to all alerts
+            for a in alerts:
+                area = a.get("data", "")
+                if area in alert_tracking and "alertStartTime" not in a:
+                    a["alertStartTime"] = alert_tracking[area]["start"]
 
             cache["alerts"]["data"] = alerts
             cache["alerts"]["timestamp"] = time.time()
@@ -1075,6 +1168,12 @@ async def serve_news():
     return HTMLResponse(html)
 
 
+@app.get("/tablet")
+async def serve_tablet():
+    html = (PUBLIC_DIR / "tablet.html").read_text(encoding="utf-8")
+    return HTMLResponse(html)
+
+
 @app.get("/tv")
 async def serve_tv():
     html = (PUBLIC_DIR / "tv.html").read_text(encoding="utf-8")
@@ -1084,6 +1183,18 @@ async def serve_tv():
 @app.get("/alerts-news")
 async def serve_alerts_news():
     html = (PUBLIC_DIR / "alerts-news.html").read_text(encoding="utf-8")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/map")
+async def serve_map():
+    html = (PUBLIC_DIR / "map.html").read_text(encoding="utf-8")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/mobile")
+async def serve_mobile():
+    html = (PUBLIC_DIR / "mobile.html").read_text(encoding="utf-8")
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 

@@ -2,6 +2,12 @@
 
 Real-time dashboard for Israel's Homefront Command (Pikud HaOref) rocket and situation alerts, displayed on interactive maps with polygon overlays covering 1,450 alert areas.
 
+![Red Alert Geodash — Dashboard](screenshots/v2/dashboard.png)
+
+## Intended Use
+
+This dashboard is designed as an **always-on display** for situational awareness and preparedness. Mount it on a wall-mounted TV, a spare monitor, or a tablet to keep a persistent, at-a-glance view of the security situation across Israel. It is built for households, community security rooms, and anyone who wants passive, real-time awareness of Homefront Command alerts without needing to check their phone.
+
 > **This application only works when hosted from an Israeli IP address.** The Oref alert API is geo-restricted to Israel. The backend must run from an Israeli server or through a proxy with an Israeli exit node.
 
 ## Disclaimer
@@ -14,38 +20,46 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 
 ## Screenshots
 
+### Live Dashboard (v2)
+![Red Alert Dashboard](screenshots/v2/dashboard.png)
+
+<details>
+<summary>Earlier screenshots (v1)</summary>
+
 ### Live Dashboard — Active Alert (Red Alert banner with affected areas)
-![Red Alert Active](screenshots/image(2).png)
+![Red Alert Active](screenshots/v1/image(2).png)
 
 ### Live Dashboard — Multi-Map View (country, Jerusalem surroundings, city detail)
-![Dashboard Overview](screenshots/image(12).png)
+![Dashboard Overview](screenshots/v1/image(12).png)
 
 ### Live Dashboard — All Clear Status with Recent Alert History
-![Dashboard All Clear](screenshots/image(8).png)
+![Dashboard All Clear](screenshots/v1/image(8).png)
 
 ### Live Dashboard — Annotated UI (monitoring area, navigation, alert panel)
-![Dashboard Annotated](screenshots/image(6).png)
+![Dashboard Annotated](screenshots/v1/image(6).png)
 
 ### TV Mode — Full-Screen Map with Alert Ticker (Samsung Tizen compatible)
-![TV Mode](screenshots/image(11).png)
+![TV Mode](screenshots/v1/image(11).png)
 
 ### TV Mode — Hostile Aircraft Alert with Area Ticker
-![TV Alert](screenshots/image(3).png)
+![TV Alert](screenshots/v1/image(3).png)
 
 ### Alerts + News — Combined View (recent alerts with live news feed)
-![Alerts and News](screenshots/image.png)
+![Alerts and News](screenshots/v1/image.png)
 
 ### News Feed — Card Layout with Source Badges
-![News Feed](screenshots/image(1).png)
+![News Feed](screenshots/v1/image(1).png)
 
 ### Recent Alerts Panel — Detailed Alert Log with Timestamps
-![Alert Log](screenshots/image(9).png)
+![Alert Log](screenshots/v1/image(9).png)
 
 ### Mobile/Tablet — Responsive Dashboard with Alert Feed
-![Mobile View](screenshots/image(10).png)
+![Mobile View](screenshots/v1/image(10).png)
 
 ### Settings — Monitoring Area and Notification Preferences
-![Settings](screenshots/image(4).png)
+![Settings](screenshots/v1/image(4).png)
+
+</details>
 
 ## Features
 
@@ -192,6 +206,10 @@ Map tiles provided by [OpenStreetMap](https://www.openstreetmap.org/) via [Leafl
 
 - [Times of Israel](https://www.timesofisrael.com/) RSS feed
 - [JNS](https://www.jns.org/) RSS feed
+
+## Responsible Polling
+
+The Oref alert API is a public government resource. Please poll it responsibly — the default interval of 3 seconds is appropriate for a single household deployment, but if you are running multiple instances or building on top of this project, increase the `POLL_INTERVAL` to reduce load on the Oref servers. There is no need to poll more frequently than every few seconds; alerts persist for their full duration.
 
 ## Geo-Restriction
 
