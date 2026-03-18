@@ -4,7 +4,7 @@
 
 Real-time dashboard for Israel's Homefront Command (Pikud HaOref) rocket and situation alerts, displayed on interactive maps with polygon overlays covering 1,450 alert areas.
 
-![Red Alert Geodash — Dashboard](screenshots/v2/dashboard.png)
+![Red Alert Geodash — All Clear](screenshots/v2/all-clear.png)
 
 ## Intended Use
 
@@ -22,8 +22,11 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 
 ## Screenshots
 
-### Live Dashboard (v2)
-![Red Alert Dashboard](screenshots/v2/dashboard.png)
+### Live Dashboard — All Clear (v2)
+![All Clear](screenshots/v2/all-clear.png)
+
+### Live Dashboard — Active Alert (v2)
+![Active Alert](screenshots/v2/dashboard.png)
 
 <details>
 <summary>Earlier screenshots (v1)</summary>
