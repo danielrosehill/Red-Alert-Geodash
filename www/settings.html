@@ -209,6 +209,30 @@
             </div>
         </div>
 
+        <div class="settings-section">
+            <h2>Display</h2>
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">Hebrew Date</div>
+                    <div class="setting-desc">Show Hebrew calendar date in the header</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="setting-hebrew-date" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">Shabbat Times</div>
+                    <div class="setting-desc">Show candle lighting and havdalah times on Fridays/Saturdays (Jerusalem)</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="setting-shabbat" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+
         <div style="display:flex;align-items:center;margin-bottom:20px;">
             <button class="save-btn" id="save-btn">Save Settings</button>
             <span class="save-status" id="save-status">Saved!</span>
@@ -219,7 +243,7 @@
 
     <div id="geodash-footer"></div>
 
-    <script src="/static/components.js?v=12"></script>
+    <script src="/static/components.js?v=14"></script>
     <script>renderHeader('settings'); renderFooter();</script>
     <script>
         // Area options — same as dashboard
@@ -241,6 +265,8 @@
             const savedArea = localStorage.getItem('geodash-local-area') || AREA_OPTIONS[0].he;
             const audioEnabled = localStorage.getItem('geodash-audio') !== 'false';
             const speechEnabled = localStorage.getItem('geodash-speech') !== 'false';
+            const hebrewDateEnabled = localStorage.getItem('geodash-hebrew-date') !== 'false';
+            const shabbatEnabled = localStorage.getItem('geodash-shabbat') !== 'false';
 
             for (const opt of AREA_OPTIONS) {
                 const el = document.createElement('option');
@@ -252,6 +278,8 @@
 
             document.getElementById('setting-audio').checked = audioEnabled;
             document.getElementById('setting-speech').checked = speechEnabled;
+            document.getElementById('setting-hebrew-date').checked = hebrewDateEnabled;
+            document.getElementById('setting-shabbat').checked = shabbatEnabled;
 
             document.getElementById('save-btn').addEventListener('click', save);
         }
@@ -261,9 +289,14 @@
             const audio = document.getElementById('setting-audio').checked;
             const speech = document.getElementById('setting-speech').checked;
 
+            const hebrewDate = document.getElementById('setting-hebrew-date').checked;
+            const shabbat = document.getElementById('setting-shabbat').checked;
+
             localStorage.setItem('geodash-local-area', area);
             localStorage.setItem('geodash-audio', audio);
             localStorage.setItem('geodash-speech', speech);
+            localStorage.setItem('geodash-hebrew-date', hebrewDate);
+            localStorage.setItem('geodash-shabbat', shabbat);
 
             const status = document.getElementById('save-status');
             status.classList.add('show');

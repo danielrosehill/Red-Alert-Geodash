@@ -16,7 +16,6 @@ const COMPONENT_CSS = `
     border-bottom: 2px solid #0f3460;
     flex-shrink: 0;
     gap: 12px;
-    overflow: hidden;
 }
 
 .geodash-header-left {
@@ -73,18 +72,43 @@ const COMPONENT_CSS = `
 
 .geodash-clocks {
     display: flex;
+    flex-wrap: wrap;
     gap: 0;
-    flex-shrink: 0;
+    flex-shrink: 1;
     align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.geodash-clock-date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    justify-content: flex-end;
+    margin-bottom: 2px;
 }
 
 .geodash-clock-date {
     color: #889;
-    font-size: clamp(0.78rem, 0.9vw, 1.2rem);
+    font-size: clamp(0.72rem, 0.85vw, 1.1rem);
     font-weight: 600;
-    margin-right: 14px;
     white-space: nowrap;
-    align-items: center;
+}
+
+.geodash-clock-hebrew {
+    color: #7a8a6a;
+    font-size: clamp(0.68rem, 0.8vw, 1rem);
+    font-weight: 600;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+.geodash-clock-shabbat {
+    color: #c9a84c;
+    font-size: clamp(0.65rem, 0.75vw, 0.95rem);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .geodash-clock-separator {
@@ -502,15 +526,17 @@ const COMPONENT_CSS = `
 }
 
 .geodash-footer-credit {
-    margin-top: 2px;
-    font-size: 0.65rem;
-    color: #445;
+    margin-top: 3px;
+    font-size: 0.8rem;
+    color: #667;
     direction: ltr;
+    letter-spacing: 0.3px;
 }
 
 .geodash-footer-credit a {
     color: #7eddb8;
     text-decoration: none;
+    font-weight: 600;
 }
 
 .geodash-footer-credit a:hover {
@@ -606,7 +632,11 @@ function renderHeader(activePage) {
             <nav class="geodash-nav">${refreshHtml}${settingsHtml}</nav>
         </div>
         <div class="geodash-clocks">
-            <span class="geodash-clock-date" id="clock-date"></span>
+            <div class="geodash-clock-date-row">
+                <span class="geodash-clock-date" id="clock-date"></span>
+                <span class="geodash-clock-hebrew" id="clock-hebrew"></span>
+                <span class="geodash-clock-shabbat" id="clock-shabbat"></span>
+            </div>
             <div class="geodash-clock-block">
                 <span class="geodash-clock-label">Israel</span>
                 <span class="geodash-clock-time" id="clock-local">--:--</span>
@@ -637,6 +667,50 @@ function renderHeader(activePage) {
     }
     updateClock();
     setInterval(updateClock, 1000);
+
+    // Fetch Hebrew date and Shabbat times from Hebcal (respects settings)
+    (async function fetchHebcalData() {
+        const showHebrew = localStorage.getItem('geodash-hebrew-date') !== 'false';
+        const showShabbat = localStorage.getItem('geodash-shabbat') !== 'false';
+
+        if (showHebrew) {
+            try {
+                const resp = await fetch('https://www.hebcal.com/converter?cfg=json&date=today&g2h=1&strict=1');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const he = document.getElementById('clock-hebrew');
+                    if (he && data.hebrew) he.textContent = data.hebrew;
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        if (showShabbat) {
+            try {
+                // Fetch this week's Shabbat times for Jerusalem
+                const now = new Date();
+                const day = now.getDay(); // 0=Sun, 5=Fri, 6=Sat
+                // Show on Friday and Saturday (or always for testing)
+                if (day === 5 || day === 6) {
+                    const resp = await fetch('https://www.hebcal.com/shabbat?cfg=json&geonameid=281184&m=50');
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        let candles = '', havdalah = '';
+                        for (const item of (data.items || [])) {
+                            if (item.category === 'candles') candles = item.date ? new Date(item.date).toLocaleTimeString('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }) : '';
+                            if (item.category === 'havdalah') havdalah = item.date ? new Date(item.date).toLocaleTimeString('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }) : '';
+                        }
+                        const shEl = document.getElementById('clock-shabbat');
+                        if (shEl) {
+                            const parts = [];
+                            if (candles) parts.push('\u{1F56F}\uFE0F ' + candles);
+                            if (havdalah) parts.push('\u2728 ' + havdalah);
+                            shEl.textContent = parts.join(' · ');
+                        }
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+    })();
 
     // TTS toggle handler
     const ttsBtn = document.getElementById('tts-toggle-btn');

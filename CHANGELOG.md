@@ -1,18 +1,22 @@
 # Changelog
 
-## v2.1 (2026-03-23)
+## v2.2 (2026-03-23)
 
 ### New Features
+- **Hebrew date** displayed in header via Hebcal API
+- **Shabbat times** — candle lighting and havdalah shown on Fridays/Saturdays (Jerusalem)
+- **Display settings** — toggle Hebrew date and Shabbat times on/off via Settings page
 - **Alert counter in footer** with type breakdown dropdown showing counts by alert category
-- **Israel border outline** rendered on all map views
-- **Date display** in header bar
+- **Israel border outline** drawn on all map views (black polyline)
+- **Gregorian date** in header (e.g. "Sun, 23 Mar")
 - **HFC (Home Front Command) status** indicator in footer
-- **Auto-refresh on new deployment** — clients detect updated static assets and reload automatically via `/api/version` endpoint
+- **Auto-refresh on new deployment** — clients poll `/api/version` and reload when static files change
 - **Fullscreen button** in header for distraction-free viewing
 
 ### Improvements
-- **Header decluttered** — Display and TV links moved into dropdown menus
-- **Footer attribution** added
+- **Header decluttered** — Display mode and TV channel links moved into compact dropdown menus
+- **Footer redesigned** — alert counter (center), attribution line, HFC status
+- **Responsive layout** — header/clocks flex-wrap on small screens, body allows overflow
 - **Default monitoring area** changed from Jerusalem South to Jerusalem Center
 
 ## v2 (2026-03-18)
