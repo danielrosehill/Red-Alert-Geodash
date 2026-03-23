@@ -293,8 +293,10 @@
         <span class="flash-bar-text" id="flash-bar-text">Monitoring...</span>
     </div>
 
-    <script src="/static/components.js?v=4"></script>
-    <script>renderHeader('alerts-news');</script>
+    <div id="geodash-footer"></div>
+
+    <script src="/static/components.js?v=12"></script>
+    <script>renderHeader('alerts-news'); renderFooter();</script>
     <script>
         // ── Config ──
         const CATEGORY_COLORS = {

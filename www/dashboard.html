@@ -18,76 +18,6 @@
             overflow: hidden;
         }
 
-        /* ── Dashboard Status Bar ────────────────────────────── */
-        .dashboard-status-bar {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            font-size: 0.95rem;
-        }
-
-        #status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #7eddb8;
-            animation: pulse 3s infinite;
-        }
-        #status-indicator.error { background: #e94560; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        #payload-indicator {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            color: #aab;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        #payload-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #444;
-            transition: background 0.15s;
-        }
-        #payload-dot.flash {
-            background: #6a9;
-            box-shadow: 0 0 3px #6a9;
-        }
-
-        #alert-count {
-            background: #e94560;
-            color: white;
-            padding: 3px 12px;
-            border-radius: 12px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            display: none;
-        }
-        #alert-count.active { display: inline-block; }
-
-        #refresh-btn {
-            background: none;
-            border: 1px solid #0f3460;
-            color: #ccd;
-            padding: 6px 14px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        #refresh-btn:hover { color: #eee; border-color: #7eddb8; }
-
-        /* Nav tabs handled by components.js */
-
         /* ── Main Content ────────────────────────────────────── */
         .main-content {
             display: flex;
@@ -700,12 +630,6 @@
 </head>
 <body>
     <div id="geodash-header"></div>
-    <div class="dashboard-status-bar" id="status-bar">
-        <span id="alert-count"></span>
-        <span id="payload-indicator" title="Flashes when new data received from HFC">HFC <span id="payload-dot"></span></span>
-        <div id="status-indicator"></div>
-        <button id="refresh-btn" title="Reload page" style="display:none">Refresh</button>
-    </div>
 
     <div class="main-content">
         <div class="maps-area">
@@ -755,7 +679,7 @@
         <aside class="sidebar">
             <div class="sidebar-section">
                 <h3>Monitoring Area</h3>
-                <div class="monitoring-area-name" id="monitoring-area-name">Jerusalem — South</div>
+                <div class="monitoring-area-name" id="monitoring-area-name">Jerusalem — Center</div>
                 <div class="area-selector" id="area-selector"></div>
                 <div class="monitoring-status" id="monitoring-status">All clear</div>
             </div>
@@ -776,8 +700,8 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/components.js?v=5"></script>
+    <script src="/static/components.js?v=12"></script>
     <script>renderHeader('live'); renderFooter();</script>
-    <script src="/static/dashboard.js?v=13"></script>
+    <script src="/static/dashboard.js?v=20"></script>
 </body>
 </html>

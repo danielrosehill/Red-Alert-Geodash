@@ -97,9 +97,9 @@ const AREA_OPTIONS = [
     { he: "\u05d9\u05e8\u05d5\u05e9\u05dc\u05d9\u05dd - \u05d0\u05d6\u05d5\u05e8 \u05ea\u05e2\u05e9\u05d9\u05d9\u05d4 \u05e2\u05d8\u05e8\u05d5\u05ea", en: "Atarot" },
 ];
 
-// Default to saved preference or Jerusalem South
+// Default to saved preference or Jerusalem Center
 const savedArea = localStorage.getItem("geodash-local-area");
-let LOCAL_AREA = savedArea || AREA_OPTIONS[0].he;
+let LOCAL_AREA = savedArea || AREA_OPTIONS[1].he;
 
 const CATEGORY_COLORS = {
     1: "#e94560", 2: "#e94560", 3: "#e94560", 4: "#e94560",
@@ -337,11 +337,7 @@ function hideLocalAlert() {
 
 // Clock handled by components.js renderHeader()
 
-// ── Refresh Button ────────────────────────────────────────────────────────────
-
-document.getElementById('refresh-btn').addEventListener('click', () => {
-    window.location.reload();
-});
+// ── Refresh Button (handled by header component) ─────────────────────────────
 
 // ── Test Alert Buttons ────────────────────────────────────────────────────────
 
@@ -430,6 +426,76 @@ mapCountry.on('dragstart zoomstart', (e) => {
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalem);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapJerusalemWide);
 L.tileLayer(TILE_URL, { attribution: TILE_ATTR }).addTo(mapCountry);
+
+// ── Israel Border Outline ─────────────────────────────────────────────────────
+// Simplified border polygon (clockwise from Eilat)
+const ISRAEL_BORDER = [
+    [29.490, 34.893], // Eilat / Taba
+    [29.520, 34.950],
+    [30.020, 34.750],
+    [30.500, 34.580],
+    [30.890, 34.370],
+    [31.100, 34.270],
+    [31.230, 34.270],
+    [31.330, 34.250],
+    [31.370, 34.310],
+    [31.530, 34.490], // Gaza border N
+    [31.590, 34.490],
+    [31.680, 34.570], // Ashkelon coast
+    [31.800, 34.630],
+    [32.000, 34.720],
+    [32.150, 34.790], // Tel Aviv
+    [32.330, 34.840],
+    [32.500, 34.880], // Netanya
+    [32.700, 34.940],
+    [32.820, 35.010], // Haifa
+    [32.920, 35.070],
+    [33.050, 35.100], // Nahariya
+    [33.100, 35.110],
+    [33.270, 35.200], // Rosh HaNikra / Lebanon border
+    [33.290, 35.460],
+    [33.310, 35.570],
+    [33.290, 35.620], // Golan NW
+    [33.250, 35.660],
+    [33.100, 35.620],
+    [33.000, 35.750],
+    [32.910, 35.790],
+    [32.830, 35.840], // Golan E / Syria border
+    [32.750, 35.800],
+    [32.640, 35.730],
+    [32.560, 35.600],
+    [32.480, 35.560],
+    [32.370, 35.560], // Beit She'an
+    [32.210, 35.560],
+    [32.110, 35.540],
+    [31.950, 35.500],
+    [31.830, 35.510],
+    [31.770, 35.520], // Jordan Valley
+    [31.640, 35.470],
+    [31.500, 35.470], // Dead Sea N
+    [31.330, 35.480],
+    [31.150, 35.400],
+    [31.000, 35.400], // Dead Sea S
+    [30.900, 35.400],
+    [30.600, 35.290],
+    [30.350, 35.150],
+    [30.100, 35.050],
+    [29.800, 34.970],
+    [29.550, 34.960],
+    [29.490, 34.893], // Close at Eilat
+];
+
+const borderStyle = {
+    color: '#111',
+    weight: 2.5,
+    opacity: 0.7,
+    fill: false,
+    interactive: false,
+};
+
+L.polyline(ISRAEL_BORDER, borderStyle).addTo(mapCountry);
+L.polyline(ISRAEL_BORDER, borderStyle).addTo(mapJerusalemWide);
+L.polyline(ISRAEL_BORDER, borderStyle).addTo(mapJerusalem);
 
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = function () {
@@ -825,17 +891,8 @@ function processAlerts(alerts) {
         monStatus.style.color = '#7eddb8';
     }
 
-    const activeCount = [...newAlerts.values()].filter(
-        a => a.category !== 13 && a.category !== 14
-    ).length;
-
-    const countEl = document.getElementById("alert-count");
-    if (activeCount > 0) {
-        countEl.textContent = `${activeCount} active`;
-        countEl.classList.add("active");
-    } else {
-        countEl.classList.remove("active");
-    }
+    // Update floating alert counter (red + warning, excludes all-clear/drills)
+    updateHeaderCounter(newAlerts);
 
     // Auto-zoom country map to active alerts
     autoZoomToAlerts(newAlerts);
@@ -945,13 +1002,105 @@ function updateFlashBar(alerts) {
     }
 }
 
+// ── Header Alert Counter ──────────────────────────────────────────────────
+
+function updateHeaderCounter(alerts) {
+    const counter = document.getElementById('geodash-alert-counter');
+    const textEl = document.getElementById('geodash-alert-counter-text');
+    const dropdown = document.getElementById('geodash-alert-dropdown');
+    if (!counter || !textEl) return;
+
+    // Count red alerts and warnings (exclude all-clear cat 13 and drills 15+)
+    const redAlerts = [];
+    const warnings = [];
+    for (const [area, info] of alerts) {
+        if (info.category >= 15 || info.category === 13) continue;
+        if (info.category === 14) {
+            warnings.push({ area, title: info.title });
+        } else {
+            redAlerts.push({ area, title: info.title, category: info.category });
+        }
+    }
+
+    const totalCount = redAlerts.length + warnings.length;
+
+    counter.classList.remove('quiet', 'active-red', 'active-warning', 'has-alerts');
+
+    if (redAlerts.length > 0) {
+        counter.classList.add('active-red', 'has-alerts');
+        textEl.textContent = `${totalCount} ALERT${totalCount !== 1 ? 'S' : ''}`;
+    } else if (warnings.length > 0) {
+        counter.classList.add('active-warning', 'has-alerts');
+        textEl.textContent = `${warnings.length} WARNING${warnings.length !== 1 ? 'S' : ''}`;
+    } else {
+        counter.classList.add('quiet');
+        textEl.textContent = '0 ALERTS';
+    }
+
+    // Build dropdown breakdown by type
+    if (dropdown) {
+        if (totalCount === 0) {
+            dropdown.innerHTML = '';
+            document.getElementById('geodash-alert-counter-wrap')?.classList.remove('open');
+        } else {
+            let html = '<div class="alert-dropdown-header">Breakdown by type</div>';
+
+            // Group red alerts by translated title
+            if (redAlerts.length > 0) {
+                const byType = {};
+                for (const a of redAlerts) {
+                    const label = translateTitle(a.title) || CATEGORY_LABELS[a.category] || 'Alert';
+                    byType[label] = (byType[label] || 0) + 1;
+                }
+                for (const [type, count] of Object.entries(byType)) {
+                    html += `<div class="alert-dropdown-row red-row">
+                        <span class="alert-dropdown-type"><span class="alert-dropdown-dot red"></span>${escapeHtml(type)}</span>
+                        <span class="alert-dropdown-count">${count}</span>
+                    </div>`;
+                }
+            }
+
+            // Group warnings by translated title
+            if (warnings.length > 0) {
+                const byType = {};
+                for (const w of warnings) {
+                    const label = translateTitle(w.title) || 'Pre-Warning';
+                    byType[label] = (byType[label] || 0) + 1;
+                }
+                for (const [type, count] of Object.entries(byType)) {
+                    html += `<div class="alert-dropdown-row warning-row">
+                        <span class="alert-dropdown-type"><span class="alert-dropdown-dot orange"></span>${escapeHtml(type)}</span>
+                        <span class="alert-dropdown-count">${count}</span>
+                    </div>`;
+                }
+            }
+
+            dropdown.innerHTML = html;
+        }
+    }
+}
+
+// Toggle dropdown on click
+(function initHeaderCounterToggle() {
+    document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('geodash-alert-counter-wrap');
+        const counter = document.getElementById('geodash-alert-counter');
+        if (!wrap || !counter) return;
+
+        if (counter.contains(e.target) && counter.classList.contains('has-alerts')) {
+            wrap.classList.toggle('open');
+        } else if (!wrap.contains(e.target)) {
+            wrap.classList.remove('open');
+        }
+    });
+})();
+
 // escapeHtml provided by components.js
 
 // ── Polling ────────────────────────────────────────────────────────────────────
 
 async function pollAlerts() {
-    const statusEl = document.getElementById("status-indicator");
-    const payloadDot = document.getElementById("payload-dot");
+    const hfcDot = document.getElementById("hfc-dot");
 
     try {
         const resp = await fetch("/api/alerts");
@@ -961,12 +1110,12 @@ async function pollAlerts() {
 
         processAlerts(data);
 
-        statusEl.classList.remove("error");
-        payloadDot.classList.add("flash");
-        setTimeout(() => payloadDot.classList.remove("flash"), 600);
+        if (hfcDot) {
+            hfcDot.classList.add("flash");
+            setTimeout(() => hfcDot.classList.remove("flash"), 600);
+        }
     } catch (err) {
         console.error("Poll error:", err);
-        statusEl.classList.add("error");
     }
 }
 
@@ -1040,8 +1189,10 @@ async function init() {
         mapJerusalem.invalidateSize();
     };
     resizeMaps();
-    setTimeout(resizeMaps, 200);
-    setTimeout(resizeMaps, 1000);
+    setTimeout(resizeMaps, 100);
+    setTimeout(resizeMaps, 500);
+    setTimeout(resizeMaps, 1500);
+    setTimeout(resizeMaps, 3000);
     window.addEventListener('resize', resizeMaps);
     setInterval(pollAlerts, POLL_INTERVAL);
 
@@ -1123,6 +1274,9 @@ async function init() {
 
     // ── News Ticker ─────────────────────────────────────────────────────────
     initNewsTicker();
+
+    // ── Auto-refresh on new deployment ───────────────────────────────────────
+    initVersionChecker();
 }
 
 // ── News Ticker ─────────────────────────────────────────────────────────────
@@ -1202,6 +1356,32 @@ function initNewsTicker() {
         tickerTimer = setInterval(showTickerItem, TICKER_INTERVAL);
     });
     setInterval(fetchTickerNews, TICKER_NEWS_POLL);
+}
+
+// ── Auto-Refresh on New Deployment ────────────────────────────────────────────
+
+let knownVersion = null;
+const VERSION_CHECK_INTERVAL = 30000; // check every 30s
+
+async function checkVersion() {
+    try {
+        const resp = await fetch('/api/version');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (knownVersion === null) {
+            knownVersion = data.version;
+        } else if (data.version !== knownVersion) {
+            console.log(`New version detected (${knownVersion} → ${data.version}), reloading...`);
+            window.location.reload();
+        }
+    } catch (e) {
+        // ignore — server might be restarting
+    }
+}
+
+function initVersionChecker() {
+    checkVersion();
+    setInterval(checkVersion, VERSION_CHECK_INTERVAL);
 }
 
 init();

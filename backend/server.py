@@ -1233,6 +1233,18 @@ async def health_check():
     }
 
 
+@app.get("/api/version")
+async def get_version():
+    """Return a hash of key static files so clients can detect new deployments."""
+    import hashlib
+    h = hashlib.md5()
+    for fname in ["static/components.js", "static/dashboard.js", "dashboard.html"]:
+        fpath = PUBLIC_DIR / fname
+        if fpath.is_file():
+            h.update(fpath.read_bytes())
+    return {"version": h.hexdigest()[:12]}
+
+
 @app.get("/static/{file_path:path}")
 async def serve_static(file_path: str):
     full_path = PUBLIC_DIR / "static" / file_path

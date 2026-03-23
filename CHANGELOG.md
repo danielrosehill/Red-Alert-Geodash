@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.1 (2026-03-23)
+
+### New Features
+- **Alert counter in footer** with type breakdown dropdown showing counts by alert category
+- **Israel border outline** rendered on all map views
+- **Date display** in header bar
+- **HFC (Home Front Command) status** indicator in footer
+- **Auto-refresh on new deployment** — clients detect updated static assets and reload automatically via `/api/version` endpoint
+- **Fullscreen button** in header for distraction-free viewing
+
+### Improvements
+- **Header decluttered** — Display and TV links moved into dropdown menus
+- **Footer attribution** added
+- **Default monitoring area** changed from Jerusalem South to Jerusalem Center
+
 ## v2 (2026-03-18)
 
 ### New Features

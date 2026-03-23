@@ -444,7 +444,7 @@ function setupScopeToggle() {
             scopeInfo.textContent = `Showing ${localRegionAreas.length} areas in ${regionName}`;
             scopeInfo.classList.add('visible');
         } else {
-            scopeInfo.innerHTML = 'Set your monitoring area in <a href="/settings" style="color:#7eddb8">Settings</a> to use this filter';
+            scopeInfo.textContent = 'Set your area on the Live dashboard to use this filter';
             scopeInfo.classList.add('visible');
         }
 

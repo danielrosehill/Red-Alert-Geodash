@@ -11,16 +11,21 @@ const COMPONENT_CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: clamp(8px, 0.8vh, 20px) clamp(16px, 1.5vw, 40px);
+    padding: clamp(6px, 0.6vh, 14px) clamp(12px, 1vw, 28px);
     background: #16213e;
     border-bottom: 2px solid #0f3460;
     flex-shrink: 0;
+    gap: 12px;
+    overflow: hidden;
 }
 
 .geodash-header-left {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .geodash-header-icon {
@@ -69,6 +74,16 @@ const COMPONENT_CSS = `
 .geodash-clocks {
     display: flex;
     gap: 0;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.geodash-clock-date {
+    color: #889;
+    font-size: clamp(0.78rem, 0.9vw, 1.2rem);
+    font-weight: 600;
+    margin-right: 14px;
+    white-space: nowrap;
     align-items: center;
 }
 
@@ -145,6 +160,115 @@ const COMPONENT_CSS = `
     border-color: #7eddb8;
 }
 
+/* ── Header Dropdown Menus ────────────────────────────── */
+.geodash-dropdown-wrap {
+    position: relative;
+}
+
+.geodash-dropdown-btn {
+    color: #aab;
+    font-size: clamp(0.82rem, 0.9vw, 1.3rem);
+    font-weight: 600;
+    padding: clamp(5px, 0.5vh, 12px) clamp(10px, 0.8vw, 20px);
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #1a3a6e;
+    background: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.geodash-dropdown-btn:hover,
+.geodash-dropdown-wrap.open .geodash-dropdown-btn {
+    color: #7eddb8;
+    border-color: #7eddb8;
+}
+
+.geodash-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    min-width: 140px;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    z-index: 3000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+
+.geodash-dropdown-wrap.open .geodash-dropdown-menu {
+    display: block;
+}
+
+.geodash-dropdown-menu a {
+    display: block;
+    padding: 8px 16px;
+    color: #ccd;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-bottom: 1px solid #0f3460;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.geodash-dropdown-menu a:last-child {
+    border-bottom: none;
+}
+
+.geodash-dropdown-menu a:hover,
+.geodash-dropdown-menu a.active {
+    background: #0f3460;
+    color: #7eddb8;
+}
+
+/* ── Fullscreen Button ─────────────────────────────────── */
+.geodash-fullscreen-btn {
+    color: #aab;
+    font-size: clamp(0.82rem, 0.9vw, 1.3rem);
+    font-weight: 600;
+    padding: clamp(5px, 0.5vh, 12px) clamp(10px, 0.8vw, 20px);
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #1a3a6e;
+    background: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.geodash-fullscreen-btn:hover {
+    color: #7eddb8;
+    border-color: #7eddb8;
+}
+
+/* ── HFC Status (footer) ──────────────────────────────── */
+.geodash-hfc-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #667;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.geodash-hfc-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #444;
+    transition: background 0.15s;
+}
+
+.geodash-hfc-dot.flash {
+    background: #6a9;
+    box-shadow: 0 0 3px #6a9;
+}
+
 .geodash-tts-toggle {
     color: #aab;
     font-size: clamp(1.1rem, 1.3vw, 2rem);
@@ -171,9 +295,181 @@ const COMPONENT_CSS = `
     opacity: 0.6;
 }
 
+/* ── Active Alert Counter (footer) ────────────────────── */
+.geodash-alert-counter-wrap {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+}
+
+.geodash-alert-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 14px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: all 0.3s;
+    border: 1px solid transparent;
+    cursor: default;
+}
+
+.geodash-alert-counter.has-alerts {
+    cursor: pointer;
+}
+
+.geodash-alert-counter.quiet {
+    background: rgba(126, 221, 184, 0.1);
+    color: #7eddb8;
+    border-color: rgba(126, 221, 184, 0.25);
+}
+
+.geodash-alert-counter.active-red {
+    background: #e94560;
+    color: #fff;
+    border-color: #ff2244;
+    animation: header-alert-pulse 1.5s infinite;
+}
+
+.geodash-alert-counter.active-warning {
+    background: #ff9800;
+    color: #fff;
+    border-color: #ffb300;
+}
+
+.geodash-alert-counter .counter-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.geodash-alert-counter.quiet .counter-dot {
+    background: #7eddb8;
+}
+
+.geodash-alert-counter.active-red .counter-dot {
+    background: #fff;
+    animation: counter-dot-blink 0.8s infinite;
+}
+
+.geodash-alert-counter.active-warning .counter-dot {
+    background: #fff;
+}
+
+.counter-chevron {
+    font-size: 0.6em;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    margin-left: 2px;
+}
+
+.geodash-alert-counter.has-alerts .counter-chevron {
+    opacity: 0.7;
+}
+
+.geodash-alert-counter-wrap.open .counter-chevron {
+    transform: rotate(180deg);
+}
+
+/* ── Alert Dropdown ───────────────────────────────────── */
+.geodash-alert-dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) scaleY(0);
+    transform-origin: bottom center;
+    min-width: 260px;
+    background: #16213e;
+    border: 2px solid #0f3460;
+    border-radius: 8px;
+    margin-top: 6px;
+    padding: 0;
+    z-index: 2000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.geodash-alert-counter-wrap.open .geodash-alert-dropdown {
+    transform: translateX(-50%) scaleY(1);
+    opacity: 1;
+}
+
+.alert-dropdown-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid #0f3460;
+    font-size: clamp(0.82rem, 0.9vw, 1.2rem);
+}
+
+.alert-dropdown-row:last-child {
+    border-bottom: none;
+}
+
+.alert-dropdown-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.alert-dropdown-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.alert-dropdown-dot.red { background: #e94560; }
+.alert-dropdown-dot.orange { background: #ff9800; }
+
+.alert-dropdown-count {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    min-width: 24px;
+    text-align: right;
+}
+
+.alert-dropdown-row.red-row {
+    color: #f0a0b0;
+}
+
+.alert-dropdown-row.warning-row {
+    color: #ffc870;
+}
+
+.alert-dropdown-header {
+    padding: 6px 16px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #667;
+    background: rgba(15, 52, 96, 0.4);
+    border-bottom: 1px solid #0f3460;
+}
+
+@keyframes header-alert-pulse {
+    0%, 100% { background: #e94560; }
+    50% { background: #c0243a; }
+}
+
+@keyframes counter-dot-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
 /* ── Footer ──────────────────────────────────────────── */
 .geodash-footer {
-    padding: 6px 16px;
+    padding: 4px 16px 6px;
     border-top: 1px solid #0f3460;
     font-size: 0.7rem;
     color: #556;
@@ -193,6 +489,32 @@ const COMPONENT_CSS = `
     font-weight: 700;
     font-size: 0.85rem;
     letter-spacing: 1px;
+}
+
+.geodash-footer-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+.geodash-footer-meta {
+    direction: rtl;
+}
+
+.geodash-footer-credit {
+    margin-top: 2px;
+    font-size: 0.65rem;
+    color: #445;
+    direction: ltr;
+}
+
+.geodash-footer-credit a {
+    color: #7eddb8;
+    text-decoration: none;
+}
+
+.geodash-footer-credit a:hover {
+    text-decoration: underline;
 }
 `;
 
@@ -238,10 +560,13 @@ function renderHeader(activePage) {
     ).join('');
 
     const pagesHtml = makeNav(pageLinks);
-    const displayHtml = makeNav(displayLinks);
 
-    const tvLinksHtml = tvLinks.map(l =>
-        `<a href="${l.href}" target="_blank" rel="noopener" class="geodash-ext-link">${l.label}</a>`
+    const displayMenuHtml = displayLinks.map(p =>
+        `<a href="${p.href}" class="${p.id === activePage ? 'active' : ''}">${p.label}</a>`
+    ).join('');
+
+    const tvMenuHtml = tvLinks.map(l =>
+        `<a href="${l.href}" target="_blank" rel="noopener">${l.label}</a>`
     ).join('');
 
     const speechOn = localStorage.getItem('geodash-speech') !== 'false';
@@ -252,6 +577,7 @@ function renderHeader(activePage) {
 
     const refreshHtml = `<a href="#" class="geodash-refresh-btn" onclick="event.preventDefault();window.location.reload();" title="Refresh page">↻</a>`;
     const settingsHtml = `<a href="/settings" class="${activePage === 'settings' ? 'active' : ''}">⚙</a>`;
+    const fullscreenHtml = `<button class="geodash-fullscreen-btn" id="fullscreen-btn" title="Toggle fullscreen">Fullscreen</button>`;
 
     const el = document.getElementById('geodash-header');
     if (!el) return;
@@ -265,15 +591,22 @@ function renderHeader(activePage) {
             </a>
             <nav class="geodash-nav">${pagesHtml}</nav>
             ${sep}
-            <nav class="geodash-nav">${displayHtml}</nav>
-            ${sep}
-            <div class="geodash-ext-links">${tvLinksHtml}</div>
+            <div class="geodash-dropdown-wrap" id="display-dropdown">
+                <button class="geodash-dropdown-btn" title="Display mode">Display ▾</button>
+                <div class="geodash-dropdown-menu">${displayMenuHtml}</div>
+            </div>
+            <div class="geodash-dropdown-wrap" id="tv-dropdown">
+                <button class="geodash-dropdown-btn" title="Live TV channels">TV ▾</button>
+                <div class="geodash-dropdown-menu">${tvMenuHtml}</div>
+            </div>
             ${sep}
             ${ttsBtnHtml}
+            ${fullscreenHtml}
             ${sep}
             <nav class="geodash-nav">${refreshHtml}${settingsHtml}</nav>
         </div>
         <div class="geodash-clocks">
+            <span class="geodash-clock-date" id="clock-date"></span>
             <div class="geodash-clock-block">
                 <span class="geodash-clock-label">Israel</span>
                 <span class="geodash-clock-time" id="clock-local">--:--</span>
@@ -291,11 +624,15 @@ function renderHeader(activePage) {
         const now = new Date();
         const cl = document.getElementById('clock-local');
         const cu = document.getElementById('clock-utc');
+        const cd = document.getElementById('clock-date');
         if (cl) cl.textContent = now.toLocaleTimeString('en-GB', {
             timeZone: 'Asia/Jerusalem', hour12: false, hour: '2-digit', minute: '2-digit',
         });
         if (cu) cu.textContent = now.toLocaleTimeString('en-GB', {
             timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit',
+        });
+        if (cd) cd.textContent = now.toLocaleDateString('en-GB', {
+            timeZone: 'Asia/Jerusalem', weekday: 'short', day: 'numeric', month: 'short',
         });
     }
     updateClock();
@@ -314,6 +651,38 @@ function renderHeader(activePage) {
             if (!newState) window.speechSynthesis?.cancel();
         });
     }
+
+    // Dropdown toggle handlers
+    document.querySelectorAll('.geodash-dropdown-wrap').forEach(wrap => {
+        const btn = wrap.querySelector('.geodash-dropdown-btn');
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const wasOpen = wrap.classList.contains('open');
+                document.querySelectorAll('.geodash-dropdown-wrap.open').forEach(w => w.classList.remove('open'));
+                if (!wasOpen) wrap.classList.add('open');
+            });
+        }
+    });
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.geodash-dropdown-wrap.open').forEach(w => w.classList.remove('open'));
+    });
+
+    // Fullscreen toggle
+    const fsBtn = document.getElementById('fullscreen-btn');
+    if (fsBtn) {
+        fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+        document.addEventListener('fullscreenchange', () => {
+            fsBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
+            fsBtn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Toggle fullscreen';
+        });
+    }
 }
 
 // ── Footer Component ───────────────────────────────────────────────────────
@@ -323,7 +692,24 @@ function renderFooter() {
     if (!el) return;
 
     el.className = 'geodash-footer';
-    el.innerHTML = `<span class="motto">ביחד ננצח</span> · <a href="/settings">Settings</a> · v1.7.0`;
+    el.innerHTML = `
+        <div class="geodash-footer-row">
+            <div class="geodash-alert-counter-wrap" id="geodash-alert-counter-wrap">
+                <div class="geodash-alert-counter quiet" id="geodash-alert-counter">
+                    <span class="counter-dot"></span>
+                    <span id="geodash-alert-counter-text">0 ALERTS</span>
+                    <span class="counter-chevron" id="counter-chevron">&#9660;</span>
+                </div>
+                <div class="geodash-alert-dropdown" id="geodash-alert-dropdown"></div>
+            </div>
+        </div>
+        <div class="geodash-footer-meta">
+            <span class="motto">\u05d1\u05d9\u05d7\u05d3 \u05e0\u05e0\u05e6\u05d7</span> · <span class="geodash-hfc-status" title="Flashes when new data received from HFC">HFC <span class="geodash-hfc-dot" id="hfc-dot"></span></span> · <a href="/settings">Settings</a> · v1.8.0
+        </div>
+        <div class="geodash-footer-credit">
+            An open source Red Alert display dashboard by <a href="https://danielrosehill.com" target="_blank" rel="noopener">Daniel Rosehill</a>
+        </div>
+    `;
 }
 
 // ── Relative Time Helper ───────────────────────────────────────────────────
