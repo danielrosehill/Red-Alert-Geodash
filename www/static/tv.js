@@ -21,7 +21,7 @@ var CATEGORY_COLORS = {
     1: "#e94560", 2: "#e94560", 3: "#e94560", 4: "#e94560",
     7: "#e94560", 8: "#e94560", 9: "#e94560", 10: "#e94560",
     11: "#e94560", 12: "#e94560",
-    14: "#ff9800",
+    14: "#e65100",
     13: "#4ecca3"
 };
 
@@ -128,7 +128,7 @@ function flashArea(name) {
     if (!layer) return;
     var on = true;
     var interval = setInterval(function() {
-        var opacity = on ? 0.6 : 0.15;
+        var opacity = on ? 0.75 : 0.2;
         layer.poly.setStyle({ fillOpacity: opacity });
         on = !on;
     }, 500);
@@ -199,7 +199,7 @@ function processAlerts(alerts) {
         area = oldAreas[i];
         if (!newAlerts[area]) {
             stopFlash(area);
-            setAreaStyle(area, "#4ecca3", 0.4);
+            setAreaStyle(area, "#4ecca3", 0.6);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             (function(a) {
                 areaTimers[a] = setTimeout(function() {
@@ -221,7 +221,7 @@ function processAlerts(alerts) {
 
         if (info.category === 13) {
             stopFlash(area);
-            setAreaStyle(area, "#4ecca3", 0.4);
+            setAreaStyle(area, "#4ecca3", 0.6);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             (function(a) {
                 areaTimers[a] = setTimeout(function() {
@@ -232,12 +232,12 @@ function processAlerts(alerts) {
         } else if (info.category === 14) {
             stopFlash(area);
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
-            setAreaStyle(area, "#ff9800", 0.45);
+            setAreaStyle(area, "#e65100", 0.65);
             tickerItems.push(info.title + ' \u2014 ' + area);
             if (isNew && area === LOCAL_AREA) showLocalAlert('warning', info.title);
         } else {
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
-            setAreaStyle(area, color, 0.6);
+            setAreaStyle(area, color, 0.75);
             flashArea(area);
             tickerItems.push(info.title + ' \u2014 ' + area);
             if (isNew && area === LOCAL_AREA) showLocalAlert('red', info.title);

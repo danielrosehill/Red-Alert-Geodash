@@ -106,7 +106,7 @@ const CATEGORY_COLORS = {
     6: "#e94560",
     7: "#e94560", 8: "#e94560", 9: "#e94560", 10: "#e94560",
     11: "#e94560", 12: "#e94560",
-    14: "#ff9800",
+    14: "#e65100",
     13: "#4ecca3",
 };
 
@@ -624,7 +624,7 @@ function flashArea(name) {
 
     let on = true;
     const interval = setInterval(() => {
-        const opacity = on ? 0.6 : 0.15;
+        const opacity = on ? 0.75 : 0.2;
         layers.country.setStyle({ fillOpacity: opacity });
         layers.jerusalemWide.setStyle({ fillOpacity: opacity });
         layers.jerusalem.setStyle({ fillOpacity: opacity });
@@ -754,7 +754,7 @@ function processAlerts(alerts) {
     for (const [area, info] of currentAlerts) {
         if (!newAlerts.has(area)) {
             stopFlash(area);
-            setAreaStyle(area, "#4ecca3", 0.4);
+            setAreaStyle(area, "#4ecca3", 0.6);
             resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
@@ -774,7 +774,7 @@ function processAlerts(alerts) {
 
         if (info.category === 13) {
             stopFlash(area);
-            setAreaStyle(area, "#4ecca3", 0.4);
+            setAreaStyle(area, "#4ecca3", 0.6);
             resetAreaTooltip(area);
             if (areaTimers[area]) clearTimeout(areaTimers[area]);
             areaTimers[area] = setTimeout(() => {
@@ -788,7 +788,7 @@ function processAlerts(alerts) {
         } else if (info.category === 14) {
             stopFlash(area);
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
-            setAreaStyle(area, "#ff9800", 0.45);
+            setAreaStyle(area, "#e65100", 0.65);
             updateAreaTooltip(area, info);
 
             if (isNew && area === LOCAL_AREA) {
@@ -796,7 +796,7 @@ function processAlerts(alerts) {
             }
         } else {
             if (areaTimers[area]) { clearTimeout(areaTimers[area]); delete areaTimers[area]; }
-            setAreaStyle(area, color, 0.6);
+            setAreaStyle(area, color, 0.75);
             if (!info.presumed) {
                 flashArea(area);
             }

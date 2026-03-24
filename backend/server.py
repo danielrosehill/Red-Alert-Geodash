@@ -94,7 +94,7 @@ last_alert_areas: list[str] = []      # areas from the last active alert
 # Alert persistence — presume active for 30 min without all-clear
 alert_tracking: dict[str, dict] = {}  # area -> {"start": epoch, "alert": dict}
 PRESUMED_ACTIVE_DURATION = 1800  # 30 minutes
-PREWARNING_ACTIVE_DURATION = 600  # 10 minutes — cat-14 pre-warnings resolve faster
+PREWARNING_ACTIVE_DURATION = 300  # 5 minutes — cat-14 pre-warnings resolve faster
 
 # Shelter instruction titles — these are post-event messages, NOT active threats.
 # Oref sends them in single-object format with various "cat" values (e.g. 10)
@@ -103,8 +103,6 @@ SHELTER_INSTRUCTION_TITLES = {
     "האירוע הסתיים",                                          # The event has ended
     "ניתן לצאת מהמרחב המוגן אך יש להישאר בקרבתו",           # May leave shelter, stay nearby
     "סיום שהייה בסמיכות למרחב המוגן",                         # End shelter proximity
-    "יש לשהות בסמיכות למרחב המוגן",                           # Stay near protected space
-    "מגן אך יש להישאר בקרבתו",                                # Shield, stay nearby
 }
 
 
@@ -116,6 +114,23 @@ def is_shelter_instruction(title: str) -> bool:
         if shelter_title in title or title in shelter_title:
             return True
     return False
+
+
+# Early warning titles — Oref sends these as cat 10 but they are pre-warnings,
+# not active infiltration alerts. Remap to category 14 for correct coloring/decay.
+EARLY_WARNING_TITLES = {
+    "בדקות הקרובות צפויות להתקבל התרעות באזורך",  # Alerts expected shortly in your area
+    "יש לשהות בסמיכות למרחב המוגן",                # Stay near protected space
+    "מגן אך יש להישאר בקרבתו",                      # Shield, stay nearby
+}
+
+
+def is_early_warning(title: str) -> bool:
+    """Check if an alert title is an early warning (alerts expected shortly)."""
+    if not title:
+        return False
+    return any(ew in title or title in ew for ew in EARLY_WARNING_TITLES)
+
 
 # Monitored areas — regions of interest for the dashboard
 MONITORED_AREAS = {
@@ -256,7 +271,14 @@ async def fetch_oref(url: str) -> list:
             # Shelter instructions (e.g. "leave shelter, stay nearby") come
             # with various cat values (often 10) but are NOT active threats.
             # Remap to category 13 (all-clear) so they're handled correctly.
-            category = 13 if is_shelter_instruction(title) else raw_cat
+            # Early warning ("alerts expected shortly") also arrives as cat 10
+            # but should be category 14 (pre-warning) for correct color/decay.
+            if is_shelter_instruction(title):
+                category = 13
+            elif is_early_warning(title):
+                category = 14
+            else:
+                category = raw_cat
 
             if isinstance(areas, list):
                 return [
