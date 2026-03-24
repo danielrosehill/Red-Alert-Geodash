@@ -4,6 +4,8 @@
 
 Real-time dashboard for Israel's Homefront Command (Pikud HaOref) rocket and situation alerts, displayed on interactive maps with polygon overlays covering 1,450 alert areas.
 
+> **Part of the [Red Alert Monitoring Stack](https://github.com/danielrosehill/Red-Alert-Monitoring-Stack-Public)** — a modular microservices architecture for real-time alert monitoring, visualization, notifications, and home automation.
+
 ![Red Alert Geodash — All Clear](screenshots/v2/all-clear.png)
 
 ## Intended Use
