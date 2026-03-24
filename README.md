@@ -85,10 +85,28 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 
 ## Architecture
 
-- **Backend**: FastAPI (Python 3.12) with background poller fetching Oref alerts every 3 seconds
+```
+┌────────────────────┐          ┌──────────────────┐
+│   Oref (Pikud      │  ──3s─▶  │  Oref Alert      │
+│   HaOref endpoint) │          │  Proxy (8764)    │
+│   Geo-restricted   │          │                  │
+└────────────────────┘          └────────┬─────────┘
+                                         │
+                                         ▼
+                                ┌──────────────────┐
+                                │  This Dashboard  │
+                                │  (8083)          │
+                                │  FastAPI +       │
+                                │  Leaflet + maps  │
+                                │  + InfluxDB      │
+                                └──────────────────┘
+```
+
+- **Alert Source**: [Pikud HaOref Alert Proxy](https://github.com/danielrosehill/Oref-Alert-Proxy) — a lightweight local relay that polls Pikud HaOref every 3s and serves the raw data via HTTP. The dashboard reads from the proxy instead of polling Oref directly. This lets multiple services (dashboards, bots, automations) share a single poller. The dashboard can also fall back to direct Pikud HaOref polling if the proxy is not configured.
+- **Backend**: FastAPI (Python 3.12) with background consumer, category classification, and alert persistence logic
 - **Database**: InfluxDB 2.7 for time-series alert storage and timeline playback
 - **Frontend**: Vanilla HTML/JS with Leaflet maps — no build step required
-- **Deployment**: Docker Compose (two containers: app + InfluxDB)
+- **Deployment**: Docker Compose (two containers: app + InfluxDB, plus the proxy)
 
 ## Pages
 
@@ -108,14 +126,28 @@ The developer assumes no responsibility for missed alerts, incorrect data, or an
 - Docker and Docker Compose
 - Server with an Israeli IP address (required for Oref API access)
 
-### 1. Clone and configure
+### 1. Start the Pikud HaOref Alert Proxy
+
+The dashboard reads alert data from the [Pikud HaOref Alert Proxy](https://github.com/danielrosehill/Oref-Alert-Proxy), a lightweight local relay that handles all Pikud HaOref polling. Start it first:
+
+```bash
+git clone https://github.com/danielrosehill/Oref-Alert-Proxy.git
+cd Oref-Alert-Proxy
+docker compose up -d
+```
+
+The proxy will be available at `http://localhost:8764`. Verify it's working:
+
+```bash
+curl -s http://localhost:8764/api/status | python3 -m json.tool
+```
+
+### 2. Clone and configure the dashboard
 
 ```bash
 git clone https://github.com/danielrosehill/Red-Alert-Geodash.git
 cd Red-Alert-Geodash
 ```
-
-### 2. Configure environment
 
 Copy the example environment file and edit as needed:
 
@@ -123,9 +155,13 @@ Copy the example environment file and edit as needed:
 cp .env.example .env
 ```
 
-Edit `.env` to set your own InfluxDB credentials and any other preferences.
+Edit `.env` to set your InfluxDB credentials and the proxy URL:
 
-### 3. Start the stack
+```
+OREF_PROXY_URL=http://host.docker.internal:8764
+```
+
+### 3. Start the dashboard
 
 ```bash
 docker compose up --build -d
@@ -134,6 +170,8 @@ docker compose up --build -d
 The dashboard will be available at `http://localhost:8083`.
 
 InfluxDB UI is available at `http://localhost:8086` with the credentials you set in `.env`.
+
+> **Note:** If you don't set `OREF_PROXY_URL`, the dashboard falls back to polling Oref directly. The proxy is recommended but not strictly required.
 
 ### 4. View logs
 
@@ -151,7 +189,8 @@ docker compose logs -f geodash
 | `INFLUX_TOKEN` | *(set in .env)* | InfluxDB admin token |
 | `INFLUX_ORG` | `geodash` | InfluxDB organisation |
 | `INFLUX_BUCKET` | `redalerts` | InfluxDB bucket name |
-| `POLL_INTERVAL` | `3` | Seconds between Oref API polls |
+| `POLL_INTERVAL` | `3` | Seconds between alert polls |
+| `OREF_PROXY_URL` | *(empty)* | URL of the [Pikud HaOref Alert Proxy](https://github.com/danielrosehill/Oref-Alert-Proxy). If set, alerts are read from the proxy. If not set, polls Pikud HaOref directly. |
 
 ### Monitored Areas
 
