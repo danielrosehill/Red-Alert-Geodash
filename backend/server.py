@@ -1,6 +1,7 @@
-"""Red Alert Geodash — Local Docker deployment with InfluxDB time-series storage.
+"""Red Alert Geodash — Real-time alert dashboard with InfluxDB time-series storage.
 
-Background poller fetches Oref alerts every 3s and writes to InfluxDB.
+Reads alerts from the Oref Alert Proxy (or directly from Oref as fallback).
+Applies category classification, alert persistence, and writes to InfluxDB.
 Frontend reads from in-memory cache (live) and InfluxDB (history/timeline).
 """
 
@@ -25,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
+
 # ── Logging ─────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -41,6 +43,10 @@ INFLUX_TOKEN = os.environ.get("INFLUX_TOKEN", "")
 INFLUX_ORG = os.environ.get("INFLUX_ORG", "geodash")
 INFLUX_BUCKET = os.environ.get("INFLUX_BUCKET", "redalerts")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "15"))
+
+# Oref Alert Proxy — if set, read alerts from proxy instead of Oref directly.
+# Falls back to direct Oref polling if not configured.
+OREF_PROXY_URL = os.environ.get("OREF_PROXY_URL", "")
 
 OREF_HEADERS = {
     "Referer": "https://www.oref.org.il/",
@@ -237,7 +243,34 @@ def store_alerts_influx(alerts: list) -> None:
         log.error("InfluxDB write error: %s", e)
 
 
-# ── Oref Fetching ────────────────────────────────────────────────────────────
+# ── Alert Fetching ───────────────────────────────────────────────────────────
+
+
+async def fetch_alerts_from_proxy() -> list:
+    """Fetch current alerts from the Oref Alert Proxy."""
+    if not http_client:
+        return []
+    try:
+        resp = await http_client.get(f"{OREF_PROXY_URL}/api/alerts", timeout=10)
+        data = resp.json()
+        return data.get("alerts", [])
+    except Exception as e:
+        log.error("Proxy fetch error: %s", e)
+        return []
+
+
+async def fetch_history_from_proxy() -> list:
+    """Fetch today's alert history from the Oref Alert Proxy."""
+    if not http_client:
+        return []
+    try:
+        resp = await http_client.get(f"{OREF_PROXY_URL}/api/history", timeout=15)
+        data = resp.json()
+        return data.get("history", [])
+    except Exception as e:
+        log.error("Proxy history fetch error: %s", e)
+        return []
+
 
 async def fetch_oref(url: str) -> list:
     """Fetch JSON from Oref, handling BOM, empty responses, and single-object format.
@@ -313,24 +346,27 @@ async def backfill_history():
     if not influx_write or not http_client:
         return
 
-    log.info("Fetching Oref alert history for backfill...")
+    log.info("Fetching alert history for backfill...")
     try:
-        history = await fetch_oref(HISTORY_URL)
+        if OREF_PROXY_URL:
+            history = await fetch_history_from_proxy()
+        else:
+            history = await fetch_oref(HISTORY_URL)
 
-        # Also try alternative history endpoint for additional data
-        try:
-            alt_history = await fetch_oref(HISTORY_ALT_URL)
-            if alt_history:
-                # Merge, dedup by alertDate+area
-                seen = {(a.get("alertDate", "") + a.get("data", "")) for a in history}
-                for a in alt_history:
-                    key = a.get("alertDate", "") + a.get("data", "")
-                    if key not in seen:
-                        history.append(a)
-                        seen.add(key)
-                log.info("Merged: %d total events from both endpoints", len(history))
-        except Exception:
-            pass
+            # Also try alternative history endpoint for additional data
+            try:
+                alt_history = await fetch_oref(HISTORY_ALT_URL)
+                if alt_history:
+                    # Merge, dedup by alertDate+area
+                    seen = {(a.get("alertDate", "") + a.get("data", "")) for a in history}
+                    for a in alt_history:
+                        key = a.get("alertDate", "") + a.get("data", "")
+                        if key not in seen:
+                            history.append(a)
+                            seen.add(key)
+                    log.info("Merged: %d total events from both endpoints", len(history))
+            except Exception:
+                pass
 
         if not history:
             log.info("No history data available")
@@ -452,7 +488,49 @@ async def poll_loop():
 
     while True:
         try:
-            alerts = await fetch_oref(ALERTS_URL)
+            # Fetch alerts from proxy if configured, otherwise direct from Oref
+            if OREF_PROXY_URL:
+                raw_alerts = await fetch_alerts_from_proxy()
+            else:
+                raw_alerts = await fetch_oref(ALERTS_URL)
+
+            # Normalize raw proxy data: proxy returns verbatim Oref, so we
+            # still need to handle single-object format and category remapping.
+            # fetch_oref already does this, but proxy data may need it too.
+            # Oref sometimes returns a single dict with "data" as a list of
+            # area names (e.g. all-clear covering many areas). The proxy wraps
+            # that as [dict], so we must expand it into per-area dicts here.
+            alerts = []
+            for a in raw_alerts:
+                title = a.get("title", "")
+                # Normalize category
+                if "cat" in a and "category" not in a:
+                    cat_raw = int(a.get("cat", 0))
+                    if is_shelter_instruction(title):
+                        a["category"] = 13
+                    elif is_early_warning(title):
+                        a["category"] = 14
+                    else:
+                        a["category"] = cat_raw
+
+                # Expand list-valued "data" into per-area alert dicts
+                data_field = a.get("data", "")
+                if isinstance(data_field, list):
+                    cat = a.get("category", int(a.get("cat", 0)))
+                    if is_shelter_instruction(title):
+                        cat = 13
+                    elif is_early_warning(title):
+                        cat = 14
+                    for area in data_field:
+                        alerts.append({
+                            "data": area,
+                            "category": cat,
+                            "title": title,
+                            "desc": a.get("desc", ""),
+                            "alertDate": a.get("alertDate", ""),
+                        })
+                else:
+                    alerts.append(a)
 
             # Merge active test alerts (expire old ones)
             now_epoch = time.time()
@@ -585,6 +663,10 @@ async def lifespan(app: FastAPI):
         log.warning("Could not load translations: %s", e)
 
     poller_task = asyncio.create_task(poll_loop())
+    if OREF_PROXY_URL:
+        log.info("Alert source: Oref Alert Proxy at %s", OREF_PROXY_URL)
+    else:
+        log.info("Alert source: direct Oref polling (no OREF_PROXY_URL set)")
     log.info("Red Alert Geodash backend ready")
 
     yield
@@ -621,7 +703,10 @@ async def get_history():
     now = time.time()
     if now - cache["history"]["timestamp"] > HISTORY_CACHE_TTL:
         try:
-            cache["history"]["data"] = await fetch_oref(HISTORY_URL)
+            if OREF_PROXY_URL:
+                cache["history"]["data"] = await fetch_history_from_proxy()
+            else:
+                cache["history"]["data"] = await fetch_oref(HISTORY_URL)
             cache["history"]["timestamp"] = now
         except Exception:
             pass

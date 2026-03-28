@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+.venv
+node_modules
+api/
+frontend/
+*.md
+!research/area_to_polygon.json

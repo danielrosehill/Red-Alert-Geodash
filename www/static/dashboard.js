@@ -893,6 +893,7 @@ function processAlerts(alerts) {
 
     // Update floating alert counter (red + warning, excludes all-clear/drills)
     updateHeaderCounter(newAlerts);
+    updateMapOverlayCounter(newAlerts);
 
     // Auto-zoom country map to active alerts
     autoZoomToAlerts(newAlerts);
@@ -936,11 +937,9 @@ function autoZoomToAlerts(alerts) {
 function updateFlashBar(alerts) {
     const bar = document.getElementById('alert-flash-bar');
     const label = document.getElementById('flashbar-label');
-    const text = document.getElementById('flashbar-text');
-    const count = document.getElementById('flashbar-count');
+    const pillsEl = document.getElementById('flashbar-pills');
+    const totalEl = document.getElementById('flashbar-total');
     if (!bar) return;
-
-    bar.classList.remove('alert-active', 'warning-active', 'allclear-active');
 
     // Categorize active alerts (exclude drills 15-28)
     const redAlerts = [];
@@ -958,47 +957,44 @@ function updateFlashBar(alerts) {
         }
     }
 
-    // Update severity indicator
-    const severityEl = document.getElementById('severity-indicator');
+    const pills = [];
 
     if (redAlerts.length > 0) {
-        bar.classList.add('alert-active');
-        // Group by type for "by type" display
+        // Group red alerts by type
         const byType = {};
         for (const a of redAlerts) {
             const typeLabel = translateTitle(a.title) || CATEGORY_LABELS[a.category] || 'Alert';
             byType[typeLabel] = (byType[typeLabel] || 0) + 1;
         }
-        const typeSummary = Object.entries(byType).map(([t, n]) => `${t}: ${n}`).join(' · ');
-
-        // Count alerts in user's local area
-        const localCount = redAlerts.filter(a => a.area === LOCAL_AREA).length;
-        const localText = localCount > 0 ? ` | Your area: ${localCount}` : '';
-
-        label.textContent = 'ACTIVE ALERTS';
-        text.textContent = typeSummary;
-        count.textContent = `All Israel: ${redAlerts.length}${localText}`;
-    } else if (warnings.length > 0) {
-        bar.classList.add('warning-active');
-        const areaNames = warnings.map(a => translateArea(a.area)).join(' · ');
-        label.textContent = 'PRE-WARNING';
-        text.textContent = areaNames;
-        count.textContent = `${warnings.length} area${warnings.length > 1 ? 's' : ''}`;
-    } else if (allClears.length > 0) {
-        bar.classList.add('allclear-active');
-        label.textContent = 'ALL CLEAR';
-        text.textContent = allClears.map(a => translateArea(a)).join(' · ');
-    } else {
-        label.textContent = 'LIVE';
-        text.textContent = 'No active alerts';
+        for (const [type, n] of Object.entries(byType)) {
+            pills.push(`<span class="flashbar-pill pill-red"><span class="pill-icon">\u{1F534}</span>${type} <span class="pill-count">${n}</span></span>`);
+        }
     }
 
-    // Update national severity level
-    if (severityEl) {
-        const severity = getSeverity(redAlerts.length);
-        severityEl.textContent = `Severity: ${severity.label} (${redAlerts.length})`;
-        severityEl.style.color = severity.color;
-        severityEl.style.borderColor = severity.color;
+    if (warnings.length > 0) {
+        pills.push(`<span class="flashbar-pill pill-warning"><span class="pill-icon">\u{1F7E0}</span>Warning <span class="pill-count">${warnings.length}</span></span>`);
+    }
+
+    if (allClears.length > 0) {
+        pills.push(`<span class="flashbar-pill pill-allclear"><span class="pill-icon">\u{1F7E2}</span>All Clear <span class="pill-count">${allClears.length}</span></span>`);
+    }
+
+    if (pills.length > 0) {
+        label.textContent = 'LIVE';
+        pillsEl.innerHTML = pills.join('');
+        const total = redAlerts.length + warnings.length;
+        if (total > 0) {
+            const localCount = redAlerts.filter(a => a.area === LOCAL_AREA).length;
+            const localText = localCount > 0 ? ` · Local: ${localCount}` : '';
+            totalEl.textContent = `All Israel: ${total}${localText}`;
+            totalEl.style.display = '';
+        } else {
+            totalEl.style.display = 'none';
+        }
+    } else {
+        label.textContent = 'LIVE';
+        pillsEl.innerHTML = '<span style="color:#889;font-weight:700;font-size:clamp(0.85rem,0.9vw,1.2rem)">No active alerts</span>';
+        totalEl.style.display = 'none';
     }
 }
 
@@ -1078,6 +1074,27 @@ function updateHeaderCounter(alerts) {
             dropdown.innerHTML = html;
         }
     }
+}
+
+// ── Map Overlay Alert Counter ─────────────────────────────────────────────
+
+function updateMapOverlayCounter(alerts) {
+    const overlay = document.getElementById('map-alert-overlay');
+    const countEl = document.getElementById('overlay-alert-count');
+    if (!overlay || !countEl) return;
+
+    let redCount = 0, warnCount = 0;
+    for (const [, info] of alerts) {
+        if (info.category >= 15 || info.category === 13) continue;
+        if (info.category === 14) warnCount++;
+        else redCount++;
+    }
+    const total = redCount + warnCount;
+    countEl.textContent = total;
+
+    overlay.classList.remove('has-alerts', 'has-warnings');
+    if (redCount > 0) overlay.classList.add('has-alerts');
+    else if (warnCount > 0) overlay.classList.add('has-warnings');
 }
 
 // Toggle dropdown on click

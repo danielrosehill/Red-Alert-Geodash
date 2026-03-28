@@ -757,6 +757,29 @@ function renderHeader(activePage) {
             fsBtn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Toggle fullscreen';
         });
     }
+
+    // Apply news ticker visibility — default hidden unless user set "show by default" in settings
+    const newsShowByDefault = localStorage.getItem('geodash-news-default') === 'true';
+    const newsHiddenPref = localStorage.getItem('geodash-news-hidden');
+    const shouldHide = newsHiddenPref !== null ? newsHiddenPref === 'true' : !newsShowByDefault;
+    if (shouldHide) {
+        const ticker = document.getElementById('news-ticker');
+        if (ticker) ticker.classList.add('hidden');
+        const btn = document.getElementById('news-toggle-btn');
+        if (btn) btn.classList.add('visible');
+    }
+}
+
+// ── News Ticker Toggle ────────────────────────────────────────────────────
+
+function toggleNewsTicker() {
+    const ticker = document.getElementById('news-ticker');
+    if (!ticker) return;
+    const hide = !ticker.classList.contains('hidden');
+    ticker.classList.toggle('hidden', hide);
+    localStorage.setItem('geodash-news-hidden', hide ? 'true' : 'false');
+    const btn = document.getElementById('news-toggle-btn');
+    if (btn) btn.classList.toggle('visible', hide);
 }
 
 // ── Footer Component ───────────────────────────────────────────────────────
@@ -767,16 +790,6 @@ function renderFooter() {
 
     el.className = 'geodash-footer';
     el.innerHTML = `
-        <div class="geodash-footer-row">
-            <div class="geodash-alert-counter-wrap" id="geodash-alert-counter-wrap">
-                <div class="geodash-alert-counter quiet" id="geodash-alert-counter">
-                    <span class="counter-dot"></span>
-                    <span id="geodash-alert-counter-text">0 ALERTS</span>
-                    <span class="counter-chevron" id="counter-chevron">&#9660;</span>
-                </div>
-                <div class="geodash-alert-dropdown" id="geodash-alert-dropdown"></div>
-            </div>
-        </div>
         <div class="geodash-footer-meta">
             <span class="motto">\u05d1\u05d9\u05d7\u05d3 \u05e0\u05e0\u05e6\u05d7</span> · <span class="geodash-hfc-status" title="Flashes when new data received from HFC">HFC <span class="geodash-hfc-dot" id="hfc-dot"></span></span> · <a href="/settings">Settings</a> · v1.8.0
         </div>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Nightly PostgreSQL backup → S3-compatible storage
+# Nightly InfluxDB backup → S3-compatible storage
 #
-# Exports all alert data from PostgreSQL as CSV, compresses it, and syncs to
+# Exports all alert data from InfluxDB as CSV, compresses it, and syncs to
 # an S3-compatible bucket (e.g. AWS S3, Wasabi, MinIO).
 #
 # Usage:  ./nightly-backup.sh
@@ -11,7 +11,10 @@ set -euo pipefail
 
 BACKUP_DIR="/tmp/geodash-backup"
 DATE=$(date +%Y-%m-%d)
-CONTAINER="geodash-postgres"
+CONTAINER="${INFLUXDB_CONTAINER:-geodash-influxdb}"
+BUCKET="${INFLUX_BUCKET:-redalerts}"
+ORG="${INFLUX_ORG:-geodash}"
+TOKEN="${INFLUX_TOKEN:-geodash-dev-token}"
 S3_BUCKET="${BACKUP_S3_BUCKET:?Set BACKUP_S3_BUCKET environment variable (e.g. s3://my-backup-bucket)}"
 AWS_PROFILE="${BACKUP_AWS_PROFILE:-default}"
 
@@ -21,22 +24,20 @@ rm -rf "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
 
 # Export alert events
-docker exec "$CONTAINER" psql -U geodash -d geodash \
-  -c "COPY (SELECT * FROM alerts WHERE ts > now() - INTERVAL '30 days' ORDER BY ts DESC) TO STDOUT WITH CSV HEADER" \
+docker exec "$CONTAINER" influx query \
+  "from(bucket:\"$BUCKET\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"alert\")" \
+  --org "$ORG" --token "$TOKEN" --raw \
   > "$BACKUP_DIR/alerts-${DATE}.csv"
 
 # Export snapshots
-docker exec "$CONTAINER" psql -U geodash -d geodash \
-  -c "COPY (SELECT * FROM snapshots WHERE ts > now() - INTERVAL '30 days' ORDER BY ts DESC) TO STDOUT WITH CSV HEADER" \
+docker exec "$CONTAINER" influx query \
+  "from(bucket:\"$BUCKET\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"snapshot\")" \
+  --org "$ORG" --token "$TOKEN" --raw \
   > "$BACKUP_DIR/snapshots-${DATE}.csv"
-
-# Full pg_dump for disaster recovery
-docker exec "$CONTAINER" pg_dump -U geodash -d geodash --clean --if-exists \
-  > "$BACKUP_DIR/geodash-full-${DATE}.sql"
 
 # Compress
 cd "$BACKUP_DIR"
-tar czf "geodash-backup-${DATE}.tar.gz" *.csv *.sql
+tar czf "geodash-backup-${DATE}.tar.gz" *.csv
 
 # Upload to S3-compatible storage
 aws s3 cp "geodash-backup-${DATE}.tar.gz" \

@@ -231,6 +231,16 @@
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">News Ticker</div>
+                    <div class="setting-desc">Show news ticker by default on the dashboard (can still toggle per-session)</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" id="setting-news-default">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
         </div>
 
         <div style="display:flex;align-items:center;margin-bottom:20px;">
@@ -267,6 +277,7 @@
             const speechEnabled = localStorage.getItem('geodash-speech') !== 'false';
             const hebrewDateEnabled = localStorage.getItem('geodash-hebrew-date') !== 'false';
             const shabbatEnabled = localStorage.getItem('geodash-shabbat') !== 'false';
+            const newsDefaultEnabled = localStorage.getItem('geodash-news-default') === 'true';
 
             for (const opt of AREA_OPTIONS) {
                 const el = document.createElement('option');
@@ -280,6 +291,7 @@
             document.getElementById('setting-speech').checked = speechEnabled;
             document.getElementById('setting-hebrew-date').checked = hebrewDateEnabled;
             document.getElementById('setting-shabbat').checked = shabbatEnabled;
+            document.getElementById('setting-news-default').checked = newsDefaultEnabled;
 
             document.getElementById('save-btn').addEventListener('click', save);
         }
@@ -291,12 +303,16 @@
 
             const hebrewDate = document.getElementById('setting-hebrew-date').checked;
             const shabbat = document.getElementById('setting-shabbat').checked;
+            const newsDefault = document.getElementById('setting-news-default').checked;
 
             localStorage.setItem('geodash-local-area', area);
             localStorage.setItem('geodash-audio', audio);
             localStorage.setItem('geodash-speech', speech);
             localStorage.setItem('geodash-hebrew-date', hebrewDate);
             localStorage.setItem('geodash-shabbat', shabbat);
+            localStorage.setItem('geodash-news-default', newsDefault);
+            // Clear per-session override so the new default takes effect
+            localStorage.removeItem('geodash-news-hidden');
 
             const status = document.getElementById('save-status');
             status.classList.add('show');

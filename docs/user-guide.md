@@ -76,8 +76,8 @@ All endpoints return JSON.
 | `GET /api/monitored-areas` | Status of configured monitored areas (Jerusalem, Tel Aviv, etc.) |
 | `GET /api/format-samples` | List daily Oref API format captures |
 | `GET /api/format-samples/{date}` | View a specific day's raw API capture |
-| `GET /api/news` | Aggregated news feed |
 | `GET /api/health` | Health check |
+| `GET /api/news` | Aggregated news feed |
 
 ## Deployment
 
@@ -88,7 +88,7 @@ The dashboard runs as two Docker containers:
 | `geodash-app` | FastAPI backend + static frontend | 8083 (host) → 8765 (container) |
 | `geodash-influxdb` | InfluxDB time-series database | 8086 |
 
-To redeploy after changes:
+To deploy:
 
 ```bash
 docker compose up --build -d

@@ -82,8 +82,8 @@ A typical event follows this pattern:
 ## InfluxDB Schema
 
 **Database**: InfluxDB 2.7
-**Organisation**: configurable (default: `geodash`)
-**Bucket**: configurable (default: `redalerts`)
+**Organisation**: configurable via `INFLUX_ORG` (default: `geodash`)
+**Bucket**: configurable via `INFLUX_BUCKET` (default: `redalerts`)
 **Retention**: Unlimited (no expiry set)
 
 ### Measurement: `alert`

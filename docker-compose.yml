@@ -1,38 +1,47 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: geodash-postgres
+  influxdb:
+    image: influxdb:2
+    container_name: geodash-influxdb
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5433:5432"   # Postgres — localhost only, port 5433 to avoid conflicts
+      - "127.0.0.1:${INFLUXDB_PORT:-8086}:8086"   # InfluxDB UI — localhost only
     environment:
-      POSTGRES_USER: geodash
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: geodash
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-geodash-admin-pw}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-geodash}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-redalerts}
+      DOCKER_INFLUXDB_INIT_RETENTION: 0  # keep forever
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-geodash-dev-token}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U geodash"]
-      interval: 10s
+      test: ["CMD", "influx", "ping"]
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
 
   geodash:
     build: .
     container_name: geodash-app
     restart: unless-stopped
     ports:
-      - "8083:8765"   # Dashboard at http://localhost:8083
+      - "${GEODASH_PORT:-8083}:8765"   # Dashboard at http://localhost:8083
     environment:
-      DATABASE_URL: postgresql://geodash:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/geodash
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-geodash-dev-token}
+      INFLUX_ORG: ${INFLUX_ORG:-geodash}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-redalerts}
       POLL_INTERVAL: ${POLL_INTERVAL:-3}
+      OREF_PROXY_URL: ${OREF_PROXY_URL:-}
       PYTHONUNBUFFERED: "1"
     volumes:
       - geodash-samples:/app/data/format-samples  # Daily Oref format captures
       - geodash-settings:/app/data/user-settings   # Persistent user settings
     depends_on:
-      postgres:
+      influxdb:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/api/health"]
@@ -42,6 +51,7 @@ services:
       start_period: 15s
 
 volumes:
-  pgdata:
+  influxdb-data:
+  influxdb-config:
   geodash-samples:
   geodash-settings:

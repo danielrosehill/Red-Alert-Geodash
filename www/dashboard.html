@@ -86,40 +86,22 @@
             height: 100%;
         }
 
-        /* ── Alert Flash Bar ─────────────────────────────────── */
+        /* ── Status Bar ──────────────────────────────────────── */
         .alert-flash-bar {
             background: #16213e;
             border-top: 2px solid #0f3460;
-            padding: clamp(10px, 1vh, 20px) clamp(20px, 1.5vw, 40px);
+            padding: clamp(6px, 0.8vh, 14px) clamp(20px, 1.5vw, 40px);
             display: flex;
             align-items: center;
-            gap: clamp(16px, 1.2vw, 28px);
+            gap: clamp(12px, 1vw, 24px);
             flex-shrink: 0;
-            min-height: clamp(48px, 5vh, 80px);
+            min-height: clamp(40px, 4.5vh, 64px);
             overflow: hidden;
             white-space: nowrap;
-            transition: background 0.3s, border-color 0.3s;
-        }
-
-        .alert-flash-bar.alert-active {
-            background: #e94560;
-            border-top-color: #ff2244;
-            animation: flashbar-red 1s infinite;
-        }
-
-        .alert-flash-bar.warning-active {
-            background: #e65100;
-            border-top-color: #ffb300;
-            animation: flashbar-orange 1.2s infinite;
-        }
-
-        .alert-flash-bar.allclear-active {
-            background: #1a3a2a;
-            border-top-color: #4ecca3;
         }
 
         .flashbar-label {
-            font-size: clamp(0.85rem, 1vw, 1.5rem);
+            font-size: clamp(0.8rem, 0.9vw, 1.2rem);
             font-weight: 800;
             letter-spacing: 2px;
             text-transform: uppercase;
@@ -127,68 +109,57 @@
             flex-shrink: 0;
         }
 
-        .alert-flash-bar.alert-active .flashbar-label {
-            color: #fff;
-            font-size: clamp(1rem, 1.2vw, 1.8rem);
-        }
-
-        .alert-flash-bar.warning-active .flashbar-label {
-            color: #fff;
-            font-size: clamp(1rem, 1.2vw, 1.8rem);
-        }
-
-        .alert-flash-bar.allclear-active .flashbar-label {
-            color: #4ecca3;
-        }
-
-        .flashbar-text {
-            font-size: clamp(1rem, 1.1vw, 1.7rem);
-            font-weight: 700;
-            color: #889;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .flashbar-pills {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             flex: 1;
+            overflow: hidden;
         }
 
-        .alert-flash-bar.alert-active .flashbar-text {
-            color: #fff;
-            font-size: clamp(1.1rem, 1.3vw, 2rem);
-        }
-
-        .alert-flash-bar.warning-active .flashbar-text {
-            color: #fff;
-            font-size: clamp(1.1rem, 1.3vw, 2rem);
-        }
-
-        .alert-flash-bar.allclear-active .flashbar-text {
-            color: #7eddb8;
-        }
-
-        .flashbar-count {
-            font-size: 0.9rem;
-            font-weight: 800;
-            color: #fff;
-            background: rgba(0,0,0,0.3);
-            padding: 3px 12px;
-            border-radius: 12px;
-            flex-shrink: 0;
-            display: none;
+        .flashbar-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: clamp(0.8rem, 0.85vw, 1.1rem);
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 14px;
             white-space: nowrap;
         }
 
-        .alert-flash-bar.alert-active .flashbar-count,
-        .alert-flash-bar.warning-active .flashbar-count {
-            display: inline-block;
+        .flashbar-pill.pill-red {
+            background: #e94560;
+            color: #fff;
         }
 
-        @keyframes flashbar-red {
-            0%, 100% { background: #e94560; }
-            50% { background: #c0243a; }
+        .flashbar-pill.pill-warning {
+            background: #e65100;
+            color: #fff;
         }
 
-        @keyframes flashbar-orange {
-            0%, 100% { background: #e65100; }
-            50% { background: #e07800; }
+        .flashbar-pill.pill-allclear {
+            background: #1a3a2a;
+            color: #4ecca3;
+        }
+
+        .flashbar-pill .pill-icon {
+            font-size: 0.9em;
+        }
+
+        .flashbar-pill .pill-count {
+            font-weight: 900;
+        }
+
+        .flashbar-total {
+            font-size: clamp(0.75rem, 0.8vw, 1rem);
+            font-weight: 800;
+            color: #fff;
+            background: rgba(255,255,255,0.12);
+            padding: 4px 14px;
+            border-radius: 14px;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .severity-indicator {
@@ -334,6 +305,87 @@
             flex-shrink: 0;
             white-space: nowrap;
             font-variant-numeric: tabular-nums;
+        }
+
+        /* ── News Ticker Toggle ─────────────────────────────── */
+        .news-ticker.hidden { display: none; }
+        .news-toggle-btn {
+            display: none;
+            background: #0d1a33;
+            border: 1px solid #0f3460;
+            color: #4a7ab5;
+            font-size: clamp(0.7rem, 0.8vw, 0.9rem);
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 6px 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+            align-self: center;
+            border-radius: 4px;
+        }
+        .news-toggle-btn:hover { color: #7eddb8; border-color: #7eddb8; }
+        .news-ticker.hidden ~ .alert-flash-bar ~ .news-toggle-btn,
+        .news-ticker.hidden + .news-toggle-btn { display: none; }
+        /* Show the toggle button when ticker is hidden */
+        .news-toggle-btn.visible { display: block; }
+        .news-close-btn {
+            background: none;
+            border: none;
+            color: #4a7ab5;
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 0 6px;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+        .news-close-btn:hover { color: #e94560; }
+
+        /* ── Map Alert Counter Overlay ─────────────────────── */
+        .map-alert-overlay {
+            position: absolute;
+            bottom: clamp(12px, 2vh, 28px);
+            right: clamp(12px, 1.5vw, 28px);
+            z-index: 800;
+            background: rgba(30, 40, 60, 0.85);
+            border: 2px solid #4ecca3;
+            border-radius: 14px;
+            padding: clamp(10px, 1.2vh, 20px) clamp(16px, 1.5vw, 32px);
+            text-align: center;
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+            min-width: clamp(100px, 12vw, 200px);
+        }
+        .map-alert-overlay .overlay-count {
+            font-size: clamp(2rem, 4vw, 4.5rem);
+            font-weight: 900;
+            color: #7eddb8;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .map-alert-overlay .overlay-label {
+            font-size: clamp(0.7rem, 0.9vw, 1.1rem);
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #7eddb8;
+            margin-top: 2px;
+        }
+        .map-alert-overlay.has-alerts {
+            border-color: #e94560;
+            background: rgba(60, 20, 30, 0.9);
+        }
+        .map-alert-overlay.has-alerts .overlay-count,
+        .map-alert-overlay.has-alerts .overlay-label {
+            color: #fff;
+        }
+        .map-alert-overlay.has-warnings {
+            border-color: #ff9800;
+            background: rgba(60, 40, 15, 0.9);
+        }
+        .map-alert-overlay.has-warnings .overlay-count,
+        .map-alert-overlay.has-warnings .overlay-label {
+            color: #fff;
         }
 
         .leaflet-container { background: #e8e8e8; }
@@ -648,25 +700,31 @@
                         <div class="map-label">Jerusalem & Surroundings</div>
                         <div class="map-wrap"><div id="map-jerusalem-wide"></div></div>
                     </div>
-                    <div class="map-card">
+                    <div class="map-card" style="position:relative">
                         <div class="map-label">Jerusalem — City Detail</div>
                         <div class="map-wrap"><div id="map-jerusalem"></div></div>
+                        <div class="map-alert-overlay" id="map-alert-overlay">
+                            <div class="overlay-count" id="overlay-alert-count">0</div>
+                            <div class="overlay-label">ALERTS</div>
+                        </div>
                     </div>
                 </div>
             </div>
+            <!-- News toggle button (visible when ticker hidden) -->
+            <button class="news-toggle-btn" id="news-toggle-btn" onclick="toggleNewsTicker()">Show News</button>
             <!-- News ticker -->
             <div class="news-ticker" id="news-ticker">
                 <span class="ticker-label">NEWS</span>
                 <div class="ticker-item" id="ticker-item">
                     <span class="ticker-headline" id="ticker-headline">Loading...</span>
                 </div>
+                <button class="news-close-btn" id="news-close-btn" onclick="toggleNewsTicker()" title="Hide news ticker">&times;</button>
             </div>
-            <!-- Alert flash bar -->
+            <!-- Status bar -->
             <div class="alert-flash-bar" id="alert-flash-bar">
                 <span class="flashbar-label" id="flashbar-label">LIVE</span>
-                <span class="flashbar-text" id="flashbar-text">No active alerts</span>
-                <span class="flashbar-count" id="flashbar-count"></span>
-                <span class="severity-indicator" id="severity-indicator" style="display:none">Severity: No Active Threats (0)</span>
+                <div class="flashbar-pills" id="flashbar-pills"></div>
+                <span class="flashbar-total" id="flashbar-total" style="display:none"></span>
                 <div class="test-alert-group" id="test-alert-group">
                     <button class="test-alert-btn test-red" id="test-red-btn" title="Test red alert (rockets/missiles)">Test Red</button>
                     <button class="test-alert-btn test-warning" id="test-warning-btn" title="Test early warning / pre-warning">Test Warning</button>
