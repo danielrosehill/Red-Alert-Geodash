@@ -39,6 +39,11 @@ function getRegion(hebrewName) {
     return areaRegions[hebrewName].region_en || '';
 }
 
+function getZone(hebrewName) {
+    if (!hebrewName || !areaRegions[hebrewName]) return '';
+    return areaRegions[hebrewName].zone || '';
+}
+
 const TITLE_TRANSLATIONS = {
     "ירי רקטות וטילים": "Rockets",
     "חדירת כלי טיס עוין": "UAV",
@@ -898,8 +903,9 @@ function processAlerts(alerts) {
     // Auto-zoom country map to active alerts
     autoZoomToAlerts(newAlerts);
 
-    // Update the alert flash bar
+    // Update the alert flash bar and zone indicator
     updateFlashBar(newAlerts);
+    updateZoneBar(newAlerts);
 }
 
 // ── Auto-Zoom ──────────────────────────────────────────────────────────────
@@ -931,6 +937,32 @@ function autoZoomToAlerts(alerts) {
     }
 }
 
+
+// ── Zone Indicator Bar ──────────────────────────────────────────────────────
+
+const ZONE_NAMES = ['North', 'Gush Dan', 'Jerusalem', 'Judea & Samaria', 'South'];
+const ZONE_FLASH_THRESHOLD = 50;
+
+function updateZoneBar(alerts) {
+    const counts = {};
+    for (const z of ZONE_NAMES) counts[z] = 0;
+
+    for (const [area, info] of alerts) {
+        if (info.category >= 13) continue; // only active threats
+        const zone = getZone(area);
+        if (zone && counts[zone] !== undefined) counts[zone]++;
+    }
+
+    for (const z of ZONE_NAMES) {
+        const chip = document.querySelector(`.zone-chip[data-zone="${z}"]`);
+        if (!chip) continue;
+        const countEl = document.getElementById(`zone-count-${z}`);
+        if (countEl) countEl.textContent = counts[z];
+
+        chip.classList.toggle('zone-active', counts[z] > 0);
+        chip.classList.toggle('zone-flash', counts[z] >= ZONE_FLASH_THRESHOLD);
+    }
+}
 
 // ── Alert Flash Bar ─────────────────────────────────────────────────────────
 

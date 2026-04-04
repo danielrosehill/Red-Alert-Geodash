@@ -388,6 +388,67 @@
             color: #fff;
         }
 
+        /* ── Zone Indicator Bar ──────────────────────────── */
+        .zone-bar {
+            background: #16213e;
+            border-top: 2px solid #0f3460;
+            display: flex;
+            align-items: stretch;
+            flex-shrink: 0;
+            min-height: clamp(38px, 4vh, 56px);
+            gap: 0;
+        }
+
+        .zone-chip {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(6px, 0.5vw, 12px);
+            padding: clamp(6px, 0.6vh, 12px) clamp(10px, 0.8vw, 18px);
+            font-size: clamp(0.78rem, 0.85vw, 1.15rem);
+            font-weight: 700;
+            color: #889;
+            border-right: 1px solid #0f3460;
+            transition: background 0.3s, color 0.3s;
+            position: relative;
+        }
+
+        .zone-chip:last-child { border-right: none; }
+
+        .zone-chip .zone-name {
+            letter-spacing: 0.5px;
+        }
+
+        .zone-chip .zone-count {
+            background: rgba(255,255,255,0.08);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            font-variant-numeric: tabular-nums;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        .zone-chip.zone-active {
+            background: rgba(233, 69, 96, 0.15);
+            color: #e94560;
+        }
+
+        .zone-chip.zone-active .zone-count {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .zone-chip.zone-flash {
+            animation: zone-flash-pulse 0.6s infinite;
+        }
+
+        @keyframes zone-flash-pulse {
+            0%, 100% { background: rgba(233, 69, 96, 0.25); }
+            50% { background: rgba(233, 69, 96, 0.55); color: #fff; }
+        }
+
         .leaflet-container { background: #e8e8e8; }
 
         .legend {
@@ -712,6 +773,14 @@
             </div>
             <!-- News toggle button (visible when ticker hidden) -->
             <button class="news-toggle-btn" id="news-toggle-btn" onclick="toggleNewsTicker()">Show News</button>
+            <!-- Zone indicator bar -->
+            <div class="zone-bar" id="zone-bar">
+                <div class="zone-chip" data-zone="North"><span class="zone-name">North</span><span class="zone-count" id="zone-count-North">0</span></div>
+                <div class="zone-chip" data-zone="Gush Dan"><span class="zone-name">Gush Dan</span><span class="zone-count" id="zone-count-Gush Dan">0</span></div>
+                <div class="zone-chip" data-zone="Jerusalem"><span class="zone-name">Jerusalem</span><span class="zone-count" id="zone-count-Jerusalem">0</span></div>
+                <div class="zone-chip" data-zone="Judea & Samaria"><span class="zone-name">Judea & Samaria</span><span class="zone-count" id="zone-count-Judea & Samaria">0</span></div>
+                <div class="zone-chip" data-zone="South"><span class="zone-name">South</span><span class="zone-count" id="zone-count-South">0</span></div>
+            </div>
             <!-- News ticker -->
             <div class="news-ticker" id="news-ticker">
                 <span class="ticker-label">NEWS</span>
@@ -761,6 +830,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/static/components.js?v=14"></script>
     <script>renderHeader('live'); renderFooter();</script>
-    <script src="/static/dashboard.js?v=22"></script>
+    <script src="/static/dashboard.js?v=23"></script>
 </body>
 </html>
